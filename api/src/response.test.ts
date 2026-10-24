@@ -159,3 +159,30 @@ test("serves the dashboard for browser navigations and JSON for API calls", asyn
     server.close();
   }
 });
+
+test("settings overview reports configuration without secrets", async () => {
+  const { server, post, get } = await start(config({ dashboardUser: "", telegramToken: "secret-token-value" }));
+  try {
+    await post("/events", burst("203.0.113.50"));
+    const res = await get("/settings/overview");
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    assert.equal(text.includes("secret-token-value"), false);
+    const body = JSON.parse(text) as {
+      host_id: string;
+      dashboard_auth: boolean;
+      telegram: { configured: boolean };
+      collector: { events: number; incidents: number };
+      response: { allowlist: string[]; runner_configured: boolean };
+    };
+    assert.equal(body.host_id, "ubuntu-01");
+    assert.equal(body.dashboard_auth, false);
+    assert.equal(body.telegram.configured, true);
+    assert.equal(body.collector.events, 5);
+    assert.equal(body.collector.incidents, 1);
+    assert.deepEqual(body.response.allowlist, ["198.51.100.0/24"]);
+    assert.equal(body.response.runner_configured, false);
+  } finally {
+    server.close();
+  }
+});

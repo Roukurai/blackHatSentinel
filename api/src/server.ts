@@ -18,6 +18,7 @@ import {
 } from "./llm-settings.ts";
 import type { SendText } from "./notify.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
+import { settingsOverview } from "./overview.ts";
 import type { Config, Incident, SentinelEvent } from "./types.ts";
 import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
@@ -132,6 +133,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
 
   if (path === "/incidents" && req.method === "GET") {
     sendJson(res, 200, listIncidentRecords(db).map((record) => withResponse(db, toIncident(record), eventsByIds(db, record.eventIds))));
+    return;
+  }
+
+  if (path === "/settings/overview" && req.method === "GET") {
+    sendJson(res, 200, settingsOverview(db, config));
     return;
   }
 
