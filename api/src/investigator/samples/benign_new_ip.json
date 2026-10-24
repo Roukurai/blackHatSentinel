@@ -1,0 +1,26 @@
+{
+  "status": "ok",
+  "summary": "Successful publickey login for rou from a new source IP 203.0.113.200. The same key fingerprint was previously seen succeeding; no preceding failures from this IP. Treat as informational, not compromise.",
+  "findings": [
+    {
+      "kind": "observed",
+      "statement": "Accepted publickey for rou from 203.0.113.200 (new_source_success pattern).",
+      "evidence": ["evt-rou-ok-001"]
+    },
+    {
+      "kind": "observed",
+      "statement": "Key fingerprint matches a prior successful login for the same user from another IP.",
+      "evidence": ["evt-rou-ok-001", "evt-rou-prior-001"]
+    },
+    {
+      "kind": "unknown",
+      "statement": "Auth logs cannot show post-login activity; compromise is not confirmed.",
+      "evidence": ["evt-rou-ok-001"]
+    }
+  ],
+  "recommendation": "No block recommended solely on this evidence. Confirm the new IP is expected for the operator if policy requires IP allowlisting.",
+  "mitre": ["T1078", "T1021.004"],
+  "model": "grok-4-1-fast-non-reasoning",
+  "duration_ms": 1520,
+  "created_at": "2026-10-24T17:10:00.000Z"
+}

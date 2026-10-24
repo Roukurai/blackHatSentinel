@@ -1,0 +1,26 @@
+{
+  "status": "ok",
+  "summary": "Burst of SSH authentication failures from 192.0.2.50 against multiple usernames (including empty). No successful login observed in this incident.",
+  "findings": [
+    {
+      "kind": "observed",
+      "statement": "At least five failed SSH attempts from 192.0.2.50 within a short window (burst pattern).",
+      "evidence": ["evt-burst-001", "evt-burst-002", "evt-burst-003", "evt-burst-004", "evt-burst-005"]
+    },
+    {
+      "kind": "observed",
+      "statement": "Distinct usernames targeted include user and admin; one attempt used an empty username.",
+      "evidence": ["evt-burst-001", "evt-burst-admin-001", "evt-burst-empty-001"]
+    },
+    {
+      "kind": "unknown",
+      "statement": "Auth logs alone cannot show whether the source later obtained credentials or moved laterally.",
+      "evidence": []
+    }
+  ],
+  "recommendation": "Monitor source 192.0.2.50; consider temporary block if volume continues. No success login to investigate further from SSH auth alone.",
+  "mitre": ["T1110.001", "T1110.003"],
+  "model": "grok-4-1-fast-non-reasoning",
+  "duration_ms": 1840,
+  "created_at": "2026-10-24T17:00:00.000Z"
+}
