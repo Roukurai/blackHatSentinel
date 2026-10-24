@@ -1,5 +1,7 @@
+import { useCallback, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { useHealth, useIncidents } from "./api/queries";
+import { CommandPalette, MOD_KEY, useCommandPaletteHotkey } from "./components/CommandPalette";
 import { FixtureBanner } from "./components/FixtureBanner";
 import { HealthIndicator, HealthPage } from "./components/Health";
 import { IncidentPage } from "./components/IncidentDetail";
@@ -7,11 +9,15 @@ import { IncidentsPage } from "./components/IncidentList";
 import { EmptyState } from "./components/ui";
 
 export function App() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const togglePalette = useCallback(() => setPaletteOpen((o) => !o), []);
+  useCommandPaletteHotkey(togglePalette);
+
   return (
     <div className="shell">
-      <div className="guides" aria-hidden="true" />
       <FixtureBanner />
-      <Header />
+      <Header onOpenPalette={() => setPaletteOpen(true)} />
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
       <main className="main">
         <Routes>
           <Route path="/" element={<IncidentsPage />} />
@@ -46,7 +52,7 @@ function Logo() {
   );
 }
 
-function Header() {
+function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
   const health = useHealth();
   const incidents = useIncidents();
   const host = health.data?.host_id ?? incidents.data?.[0]?.host_id;
@@ -68,6 +74,16 @@ function Header() {
           <span className="mono">{host ?? "—"}</span>
         </span>
         <span className="spacer" />
+        <button type="button" className="search-trigger" onClick={onOpenPalette} aria-label="Open command menu">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span className="search-trigger__label">Search…</span>
+          <kbd>
+            {MOD_KEY} K
+          </kbd>
+        </button>
         <HealthIndicator />
       </div>
       <nav className="tabs" aria-label="Sections">

@@ -8,7 +8,7 @@ Stack: Vite, React 19, strict TypeScript, react-router, TanStack Query. No compo
 
 Design: Geist (Vercel Design System) layout and component patterns, with the Sentinell brand
 identity from the landing page: warm dark palette (`#141210` / cream `#ece7dc`), signal red-orange
-accent, phosphor and amber, the shield mark, grid/glow background. Tokens live in
+accent (used only for attention), phosphor and amber, the shield mark. Mono type is reserved for data. Tokens live in
 `src/styles/tokens.css` (`--brand-*` primitives mapped onto the `--ds-*` names the layout uses).
 
 Fonts: JetBrains Mono (OFL) is bundled. Sentient is loaded from the Fontshare API because its
@@ -26,6 +26,9 @@ npm run build          # type-check + production build into web/dist
 ```
 
 Routes: `/` incidents · `/incidents/:id` incident (Telegram deep link) · `/health`.
+
+`⌘K` / `Ctrl+K` opens the command menu: jump to a page or search incidents by IP, ID, severity,
+status or pattern. It only navigates; approving a block always goes through the incident's dialog.
 
 ## API assumptions (pending agreement, see docs/CONTRACT.md)
 
