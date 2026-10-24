@@ -167,3 +167,15 @@ export interface LlmSettingsUpdate {
   baseUrl?: string;
   model?: string;
 }
+
+/** GET /settings/overview — read-only host configuration, never secrets. */
+export interface SettingsOverview {
+  host_id: string;
+  public_base_url: string;
+  dashboard_auth: boolean;
+  telegram: { configured: boolean; cooldown_seconds: number };
+  llm: { configured: boolean; active_provider: string; model: string; source: "settings" | "env" | "none" };
+  collector: { last_event_at: string | null; events: number; incidents: number };
+  response: { allowlist: string[]; ttl_seconds: number; runner_configured: boolean; runner_sudo: boolean };
+  detection: { fast_count: number; fast_window_seconds: number; slow_count: number; slow_window_seconds: number };
+}

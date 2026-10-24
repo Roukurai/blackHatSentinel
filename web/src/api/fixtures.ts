@@ -10,6 +10,7 @@ import type {
   IncidentDetail,
   LlmSettings,
   Origin,
+  SettingsOverview,
   ResponseAction,
   SentinelEvent,
 } from "./types";
@@ -241,11 +242,84 @@ const incidents: Incident[] = [
 const byId = new Map(incidents.map((i) => [i.id, i]));
 const delay = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(structuredClone(v)), ms));
 
+// BYOK settings are stateful in fixture mode so the setup steps react to saving a key.
+// Starts with no key so the "Connect your AI provider" step is visible.
+let llmState: LlmSettings = {
+  configured: false,
+  activeProvider: "openai",
+  baseUrl: "https://api.openai.com/v1",
+  model: "gpt-4o-mini",
+  keyLast4: null,
+  updatedAt: null,
+  source: "none",
+  providers: [
+    {
+      id: "openai",
+      label: "OpenAI",
+      configured: false,
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini",
+      keyLast4: null,
+      keyPlaceholder: "sk-…",
+      modelPlaceholder: "gpt-4o-mini",
+      baseUrlPlaceholder: "https://api.openai.com/v1",
+      hint: "platform.openai.com/api-keys",
+    },
+    {
+      id: "anthropic",
+      label: "Anthropic",
+      configured: false,
+      baseUrl: "https://api.anthropic.com/v1",
+      model: "claude-sonnet-4-5",
+      keyLast4: null,
+      keyPlaceholder: "sk-ant-…",
+      modelPlaceholder: "claude-sonnet-4-5",
+      baseUrlPlaceholder: "https://api.anthropic.com/v1",
+      hint: "console.anthropic.com",
+    },
+    {
+      id: "gemini",
+      label: "Google Gemini",
+      configured: false,
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      model: "gemini-2.0-flash",
+      keyLast4: null,
+      keyPlaceholder: "AIza…",
+      modelPlaceholder: "gemini-2.0-flash",
+      baseUrlPlaceholder: "https://generativelanguage.googleapis.com/v1beta/openai",
+      hint: "aistudio.google.com",
+    },
+    {
+      id: "openrouter",
+      label: "OpenRouter",
+      configured: false,
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "openai/gpt-4o-mini",
+      keyLast4: null,
+      keyPlaceholder: "sk-or-…",
+      modelPlaceholder: "openai/gpt-4o-mini",
+      baseUrlPlaceholder: "https://openrouter.ai/api/v1",
+      hint: "openrouter.ai/keys",
+    },
+    {
+      id: "custom",
+      label: "Custom (OpenAI-compatible)",
+      configured: false,
+      baseUrl: "",
+      model: "",
+      keyLast4: null,
+      keyPlaceholder: "API key",
+      modelPlaceholder: "model-id",
+      baseUrlPlaceholder: "https://…/v1",
+      hint: "Any OpenAI-compatible endpoint",
+    },
+  ],};
+
 export const fixtureApi: Api = {
   health: () =>
     delay<Health>({
       collector_last_event_at: ago(12),
-      llm: "ok",
+      llm: llmState.configured ? "ok" : "down",
       telegram: "ok",
       db: "ok",
       host_id: HOST,
@@ -305,81 +379,22 @@ export const fixtureApi: Api = {
     return delay(inc.action);
   },
 
-  llmSettings: () =>
-    delay<LlmSettings>({
-      configured: true,
-      activeProvider: "openai",
-      baseUrl: "https://api.openai.com/v1",
-      model: "gpt-4o-mini",
-      keyLast4: "demo",
-      updatedAt: ago(3600),
-      source: "settings",
-      providers: [
-        {
-          id: "openai",
-          label: "OpenAI",
-          configured: true,
-          baseUrl: "https://api.openai.com/v1",
-          model: "gpt-4o-mini",
-          keyLast4: "demo",
-          keyPlaceholder: "sk-…",
-          modelPlaceholder: "gpt-4o-mini",
-          baseUrlPlaceholder: "https://api.openai.com/v1",
-          hint: "platform.openai.com/api-keys",
-        },
-        {
-          id: "anthropic",
-          label: "Anthropic",
-          configured: false,
-          baseUrl: "https://api.anthropic.com/v1",
-          model: "claude-sonnet-4-5",
-          keyLast4: null,
-          keyPlaceholder: "sk-ant-…",
-          modelPlaceholder: "claude-sonnet-4-5",
-          baseUrlPlaceholder: "https://api.anthropic.com/v1",
-          hint: "console.anthropic.com",
-        },
-        {
-          id: "gemini",
-          label: "Google Gemini",
-          configured: false,
-          baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-          model: "gemini-2.0-flash",
-          keyLast4: null,
-          keyPlaceholder: "AIza…",
-          modelPlaceholder: "gemini-2.0-flash",
-          baseUrlPlaceholder: "https://generativelanguage.googleapis.com/v1beta/openai",
-          hint: "aistudio.google.com",
-        },
-        {
-          id: "openrouter",
-          label: "OpenRouter",
-          configured: false,
-          baseUrl: "https://openrouter.ai/api/v1",
-          model: "openai/gpt-4o-mini",
-          keyLast4: null,
-          keyPlaceholder: "sk-or-…",
-          modelPlaceholder: "openai/gpt-4o-mini",
-          baseUrlPlaceholder: "https://openrouter.ai/api/v1",
-          hint: "openrouter.ai/keys",
-        },
-        {
-          id: "custom",
-          label: "Custom (OpenAI-compatible)",
-          configured: false,
-          baseUrl: "",
-          model: "",
-          keyLast4: null,
-          keyPlaceholder: "API key",
-          modelPlaceholder: "model-id",
-          baseUrlPlaceholder: "https://…/v1",
-          hint: "Any OpenAI-compatible endpoint",
-        },
-      ],
+  llmSettings: () => delay<LlmSettings>(llmState),
+
+  settingsOverview: () =>
+    delay<SettingsOverview>({
+      host_id: HOST,
+      public_base_url: "http://203.0.113.200:8080",
+      dashboard_auth: false,
+      telegram: { configured: true, cooldown_seconds: 300 },
+      llm: { configured: llmState.configured, active_provider: llmState.activeProvider, model: llmState.model, source: llmState.source },
+      collector: { last_event_at: ago(12), events: eventsById.size, incidents: incidents.length },
+      response: { allowlist: ["192.0.2.0/24"], ttl_seconds: 600, runner_configured: false, runner_sudo: false },
+      detection: { fast_count: 5, fast_window_seconds: 120, slow_count: 10, slow_window_seconds: 1800 },
     }),
 
   saveLlmSettings: async (update) => {
-    const base = await fixtureApi.llmSettings();
+    const base = llmState;
     const active = update.activeProvider ?? update.provider ?? base.activeProvider;
     const target = update.provider ?? active;
     const providers = base.providers.map((p) => {
@@ -394,7 +409,7 @@ export const fixtureApi: Api = {
       };
     });
     const activeSlot = providers.find((p) => p.id === active) ?? providers[0]!;
-    return delay<LlmSettings>({
+    llmState = {
       configured: activeSlot.configured,
       activeProvider: active,
       baseUrl: activeSlot.baseUrl,
@@ -403,6 +418,7 @@ export const fixtureApi: Api = {
       updatedAt: new Date().toISOString(),
       source: "settings",
       providers,
-    });
+    };
+    return delay<LlmSettings>(llmState);
   },
 };

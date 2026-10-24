@@ -14,6 +14,7 @@ export const keys = {
   incidents: ["incidents"] as const,
   incident: (id: string) => ["incident", id] as const,
   llmSettings: ["llmSettings"] as const,
+  overview: ["settingsOverview"] as const,
 };
 
 export function useHealth() {
@@ -86,6 +87,16 @@ export function useSaveLlmSettings() {
     onSuccess: (data) => {
       qc.setQueryData(keys.llmSettings, data);
       void qc.invalidateQueries({ queryKey: keys.health });
+      void qc.invalidateQueries({ queryKey: keys.overview });
     },
+  });
+}
+
+// Configuration changes on the host (env, collector) are slow; poll gently.
+export function useSettingsOverview() {
+  return useQuery({
+    queryKey: keys.overview,
+    queryFn: ({ signal }) => api.settingsOverview(signal),
+    refetchInterval: (q) => pollUnlessFatal(q.state.error) && 5000,
   });
 }

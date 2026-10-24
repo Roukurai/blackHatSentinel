@@ -5,6 +5,7 @@ import type {
   LlmSettings,
   LlmSettingsUpdate,
   ResponseAction,
+  SettingsOverview,
 } from "./types";
 
 // Same-origin requests. Basic-auth credentials are handled by the browser's
@@ -83,6 +84,7 @@ export interface Api {
   rejectAction(actionId: string): Promise<ResponseAction | null>;
   llmSettings(signal?: AbortSignal): Promise<LlmSettings>;
   saveLlmSettings(update: LlmSettingsUpdate): Promise<LlmSettings>;
+  settingsOverview(signal?: AbortSignal): Promise<SettingsOverview>;
 }
 
 const httpApi: Api = {
@@ -94,6 +96,7 @@ const httpApi: Api = {
   rejectAction: (id) => request("POST", `/actions/${encodeURIComponent(id)}/reject`),
   llmSettings: (signal) => request("GET", "/settings/llm", signal),
   saveLlmSettings: (update) => request("PUT", "/settings/llm", undefined, update),
+  settingsOverview: (signal) => request("GET", "/settings/overview", signal),
 };
 
 // Fixture module is loaded lazily and only in dev, so it never ships in a build.
@@ -113,4 +116,5 @@ export const api: Api = {
   rejectAction: async (id) => (await getApi()).rejectAction(id),
   llmSettings: async (s) => (await getApi()).llmSettings(s),
   saveLlmSettings: async (u) => (await getApi()).saveLlmSettings(u),
+  settingsOverview: async (s) => (await getApi()).settingsOverview(s),
 };
