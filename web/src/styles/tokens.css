@@ -1,0 +1,64 @@
+/* Geist (Vercel Design System) dark theme tokens. */
+:root {
+  color-scheme: dark;
+
+  /* backgrounds */
+  --ds-background-100: #0a0a0a;
+  --ds-background-200: #000000;
+
+  /* gray scale */
+  --ds-gray-100: #1a1a1a;
+  --ds-gray-200: #1f1f1f;
+  --ds-gray-300: #292929;
+  --ds-gray-400: #2e2e2e;
+  --ds-gray-500: #454545;
+  --ds-gray-600: #878787;
+  --ds-gray-700: #8f8f8f;
+  --ds-gray-900: #a1a1a1;
+  --ds-gray-1000: #ededed;
+
+  /* translucent grays (borders, hovers) */
+  --ds-gray-alpha-100: rgba(255, 255, 255, 0.06);
+  --ds-gray-alpha-200: rgba(255, 255, 255, 0.09);
+  --ds-gray-alpha-400: rgba(255, 255, 255, 0.14);
+  --ds-gray-alpha-500: rgba(255, 255, 255, 0.24);
+
+  /* accents: 700 = solid, 900 = text on dark, subtle = tinted fill */
+  --ds-blue-700: #0070f3;
+  --ds-blue-900: #52a8ff;
+  --ds-blue-subtle: rgba(0, 112, 243, 0.16);
+
+  --ds-red-700: #e5484d;
+  --ds-red-900: #ff6166;
+  --ds-red-subtle: rgba(229, 72, 77, 0.16);
+
+  --ds-amber-700: #ffb224;
+  --ds-amber-900: #f2a20d;
+  --ds-amber-subtle: rgba(255, 178, 36, 0.14);
+
+  --ds-green-700: #46a758;
+  --ds-green-900: #62c073;
+  --ds-green-subtle: rgba(70, 167, 88, 0.16);
+
+  --ds-purple-700: #8e4ec6;
+  --ds-purple-900: #c472fb;
+  --ds-purple-subtle: rgba(142, 78, 198, 0.18);
+
+  /* focus ring */
+  --ds-focus-ring: 0 0 0 1px var(--ds-gray-alpha-500), 0 0 0 4px rgba(82, 168, 255, 0.24);
+
+  /* type */
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* radii & motion */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --ease: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --dur: 150ms;
+
+  /* layout */
+  --page-max: 1200px;
+  --gutter: 24px;
+}
