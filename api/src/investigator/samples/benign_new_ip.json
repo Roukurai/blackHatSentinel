@@ -19,6 +19,25 @@
     }
   ],
   "recommendation": "No block recommended solely on this evidence. Confirm the new IP is expected for the operator if policy requires IP allowlisting.",
+  "root_cause": {
+    "kind": "unknown",
+    "statement": "Successful login from a new source; insufficient auth-log context to determine malicious vs benign.",
+    "evidence": ["evt-rou-ok-001"]
+  },
+  "remediation": [
+    {
+      "order": 1,
+      "text": "Review the cited auth events and confirm the source IP and usernames.",
+      "urgency": "medium",
+      "mode": "manual"
+    },
+    {
+      "order": 2,
+      "text": "Check whether the successful login used an expected key or account.",
+      "urgency": "medium",
+      "mode": "manual"
+    }
+  ],
   "mitre": ["T1078", "T1021.004"],
   "model": "gpt-4o-mini",
   "duration_ms": 1520,

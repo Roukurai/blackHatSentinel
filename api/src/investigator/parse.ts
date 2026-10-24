@@ -9,11 +9,51 @@ const findingSchema = z.object({
   evidence: z.array(z.string()).default([]),
 });
 
+const rootCauseSchema = z.object({
+  kind: z.enum(["observed", "suspected", "unknown"]),
+  statement: z.string(),
+  evidence: z.array(z.string()).default([]),
+});
+
+const blockActionSchema = z
+  .object({
+    kind: z.literal("block_ip"),
+    target: z.string(),
+  })
+  .nullish();
+
+const remediationStepSchema = z.object({
+  order: z.number().int().optional(),
+  text: z.string(),
+  urgency: z
+    .string()
+    .transform((v) => v.toLowerCase())
+    .pipe(z.enum(["low", "medium", "high"]))
+    .catch("medium"),
+  mode: z
+    .string()
+    .transform((v) => v.toLowerCase())
+    .pipe(z.enum(["manual", "automatable"]))
+    .catch("manual"),
+  action: blockActionSchema.transform((a) => a ?? undefined),
+});
+
+const mitreIdSchema = z.union([
+  z.string(),
+  z.object({ id: z.string() }).transform((o) => o.id),
+]);
+
 export const modelOutputSchema = z.object({
   summary: z.string(),
   findings: z.array(findingSchema).max(8),
-  recommendation: z.string(),
-  mitre: z.array(z.string()).default([]),
+  recommendation: z.string().default(""),
+  root_cause: rootCauseSchema.nullish().transform((v) => v ?? undefined),
+  remediation: z
+    .array(remediationStepSchema)
+    .max(5)
+    .nullish()
+    .transform((v) => v ?? undefined),
+  mitre: z.array(mitreIdSchema).default([]),
 });
 
 export function extractJsonObject(text: string): string {
@@ -52,7 +92,7 @@ export async function parseWithRepair(
     {
       role: "user",
       content:
-        'Return only valid JSON matching {"summary":"","findings":[{"kind":"","statement":"","evidence":[]}],"recommendation":"","mitre":[]}',
+        'Return only valid JSON matching {"summary":"","findings":[{"kind":"","statement":"","evidence":[]}],"recommendation":"","root_cause":{"kind":"","statement":"","evidence":[]},"remediation":[{"order":1,"text":"","urgency":"medium","mode":"manual"}],"mitre":[]}',
     },
   ];
 

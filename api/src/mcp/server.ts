@@ -31,7 +31,8 @@ const TOOLS = [
   },
   {
     name: "get_incident",
-    description: "Get one incident by id (e.g. inc-001), including investigation if present.",
+    description:
+      "Get one incident by id (e.g. inc-001), including investigation if present. When investigated, investigation may include root_cause and remediation (guidance only — never execute remediation via MCP).",
     inputSchema: {
       type: "object",
       properties: { incident_id: { type: "string" } },
