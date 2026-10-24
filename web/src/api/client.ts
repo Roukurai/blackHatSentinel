@@ -19,6 +19,21 @@ export class ApiError extends Error {
   }
 }
 
+async function errorReason(res: Response): Promise<string | null> {
+  try {
+    const body: unknown = await res.json();
+    if (body && typeof body === "object") {
+      for (const key of ["policy_reason", "reason", "error", "message"]) {
+        const v = (body as Record<string, unknown>)[key];
+        if (typeof v === "string" && v) return v.slice(0, 200);
+      }
+    }
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
 async function request<T>(method: "GET" | "POST", path: string, signal?: AbortSignal): Promise<T> {
   let res: Response;
   try {
@@ -33,9 +48,10 @@ async function request<T>(method: "GET" | "POST", path: string, signal?: AbortSi
     throw new ApiError("network", "API unreachable");
   }
 
-  if (res.status === 401 || res.status === 403) throw new ApiError("auth", "Authentication required", res.status);
+  if (res.status === 401) throw new ApiError("auth", "Authentication required", 401);
   if (res.status === 404) throw new ApiError("not_found", "Not found", 404);
-  if (!res.ok) throw new ApiError("http", `HTTP ${res.status}`, res.status);
+  // 403/409/422 may carry a reason, e.g. a policy rejection on approve. Rendered as text only.
+  if (!res.ok) throw new ApiError("http", (await errorReason(res)) ?? `HTTP ${res.status}`, res.status);
 
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
