@@ -1,7 +1,7 @@
 /**
- * Live Grok smoke — skipped unless LIVE_LLM=1 and LLM_API_KEY is set.
+ * Live LLM smoke — skipped unless LIVE_LLM=1 and LLM_BASE_URL / LLM_API_KEY / LLM_MODEL are set.
  *
- *   LIVE_LLM=1 LLM_API_KEY=… LLM_MODEL=grok-4-1-fast-non-reasoning npm test -- live.smoke
+ *   LIVE_LLM=1 LLM_BASE_URL=… LLM_API_KEY=… LLM_MODEL=… npm test -- live.smoke
  */
 import { describe, expect, it } from "vitest";
 import { createInvestigator, loadLlmConfig } from "../index.js";
@@ -13,9 +13,12 @@ import {
   benignEvents,
 } from "./fixtures.js";
 
-const live = process.env.LIVE_LLM === "1" && Boolean(process.env.LLM_API_KEY);
+const cfgPreview = loadLlmConfig();
+const live =
+  process.env.LIVE_LLM === "1" &&
+  cfgPreview.configured;
 
-describe.runIf(live)("live Grok smoke", () => {
+describe.runIf(live)("live LLM smoke", () => {
   const cfg = loadLlmConfig();
 
   it(
@@ -72,8 +75,8 @@ describe.runIf(live)("live Grok smoke", () => {
   );
 });
 
-describe.runIf(!live)("live Grok smoke (skipped)", () => {
-  it("set LIVE_LLM=1 and LLM_API_KEY to enable", () => {
+describe.runIf(!live)("live LLM smoke (skipped)", () => {
+  it("set LIVE_LLM=1 and LLM_BASE_URL / LLM_API_KEY / LLM_MODEL to enable", () => {
     expect(true).toBe(true);
   });
 });

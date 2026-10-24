@@ -30,6 +30,6 @@ scheduleInvestigation(investigator, incident.id, async (id, inv) => {
 - Handshake + E2E checklist: [`src/investigator/HANDSHAKE.md`](src/investigator/HANDSHAKE.md)
 - UI samples: [`src/investigator/samples/`](src/investigator/samples/)
 - Tests: `npm test` from `api/`
-- Live Grok: `LIVE_LLM=1 LLM_API_KEY=… npm test -- live.smoke`
+- Live LLM: `LIVE_LLM=1 LLM_BASE_URL=… LLM_API_KEY=… LLM_MODEL=… npm test -- live.smoke`
 
 Kevin: after merging this module, rebase and add API dependencies to this `package.json` (do not create a second package root).

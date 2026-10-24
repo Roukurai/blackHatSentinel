@@ -53,6 +53,6 @@ Blocked until ingest / incidents / Telegram exist on the API.
 
 - [ ] Kevin merges investigator and wires `depsFromStore` + `scheduleInvestigation` after notifier enqueue
 - [ ] `LLM_*` + `HOST_ID` set on VPS (never committed)
-- [ ] `LIVE_LLM=1 npm test -- live.smoke` passes on VPS (or local with key)
+- [ ] `LIVE_LLM=1` with `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` → `npm test -- live.smoke` passes
 - [ ] `ops/demo-scenario.sh` → incident → one Telegram → investigation on `GET /incidents/:id` → dashboard findings
 - [ ] Unset `LLM_API_KEY`, restart API → Telegram still fires; investigation `unavailable`; `/health` `llm: "down"`

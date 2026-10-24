@@ -20,7 +20,7 @@
   ],
   "recommendation": "Monitor source 192.0.2.50; consider temporary block if volume continues. No success login to investigate further from SSH auth alone.",
   "mitre": ["T1110.001", "T1110.003"],
-  "model": "grok-4-1-fast-non-reasoning",
+  "model": "llm-demo",
   "duration_ms": 1840,
   "created_at": "2026-10-24T17:00:00.000Z"
 }

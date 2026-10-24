@@ -20,7 +20,7 @@
   ],
   "recommendation": "No block recommended solely on this evidence. Confirm the new IP is expected for the operator if policy requires IP allowlisting.",
   "mitre": ["T1078", "T1021.004"],
-  "model": "grok-4-1-fast-non-reasoning",
+  "model": "llm-demo",
   "duration_ms": 1520,
   "created_at": "2026-10-24T17:10:00.000Z"
 }

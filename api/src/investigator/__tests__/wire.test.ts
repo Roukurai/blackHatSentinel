@@ -9,7 +9,7 @@ import { allFixtureDeps, burstIncident } from "./fixtures.js";
 
 function unconfigured() {
   return createInvestigator(allFixtureDeps(), {
-    baseUrl: "https://api.x.ai/v1",
+    baseUrl: "https://llm.example/v1",
     apiKey: "",
     model: "",
     timeoutSeconds: 5,

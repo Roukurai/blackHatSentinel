@@ -32,7 +32,7 @@ describe("injection hardening", () => {
     const deps = createMemoryDeps([incident], [hostile]);
 
     const cfg: LlmConfig = {
-      baseUrl: "https://api.x.ai/v1",
+      baseUrl: "https://llm.example/v1",
       apiKey: "k",
       model: "m",
       timeoutSeconds: 10,
@@ -85,7 +85,7 @@ describe("injection hardening", () => {
     const inv = createInvestigator(
       createMemoryDeps([burstIncident], []),
       {
-        baseUrl: "https://api.x.ai/v1",
+        baseUrl: "https://llm.example/v1",
         apiKey: "",
         model: "",
         timeoutSeconds: 5,

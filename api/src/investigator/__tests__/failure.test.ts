@@ -5,9 +5,9 @@ import { allFixtureDeps, burstIncident } from "./fixtures.js";
 
 function cfg(over: Partial<LlmConfig> = {}): LlmConfig {
   return {
-    baseUrl: "https://api.x.ai/v1",
+    baseUrl: "https://llm.example/v1",
     apiKey: "test-key",
-    model: "grok-test",
+    model: "test-model",
     timeoutSeconds: 5,
     configured: true,
     ...over,
