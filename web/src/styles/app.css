@@ -44,7 +44,7 @@ button {
   color: var(--brand-background);
 }
 
-/* Type roles: Sentient for text and interface, JetBrains Mono only for data
+/* Type roles: Switzer for text and interface, JetBrains Mono only for data
    (IPs, IDs, timestamps, logs, evidence chips). */
 .ev-chip,
 .g-input input.mono,
@@ -1461,36 +1461,33 @@ kbd {
 
 .sidebar__foot { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 0 0; }
 .sidebar__hostcard { display: flex; align-items: center; gap: 10px; padding: 0 10px; min-width: 0; }
-.sidebar__collapse {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.sidebar-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
   height: 32px;
-  padding: 0 10px;
+  flex: none;
+  margin-left: -6px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ds-gray-900);
-  font-size: 13px;
   cursor: pointer;
   transition: background var(--dur), color var(--dur);
 }
-.sidebar__collapse:hover { background: var(--ds-gray-alpha-100); color: var(--ds-gray-1000); }
-.sidebar__collapse-label { flex: 1; text-align: left; }
+.sidebar-toggle:hover { background: var(--ds-gray-alpha-100); color: var(--ds-gray-1000); }
+.sidebar-toggle:active { transform: scale(0.96); }
 
 .layout--collapsed .sidebar { padding: 16px 8px; overflow-x: hidden; }
 .layout--collapsed .side-group__label,
 .layout--collapsed .side-item__label,
 .layout--collapsed .side-item__count,
-.layout--collapsed .sidebar__host,
-.layout--collapsed .sidebar__collapse-label,
-.layout--collapsed .sidebar__collapse kbd { display: none; }
+.layout--collapsed .sidebar__host { display: none; }
 .layout--collapsed .side-group { gap: 4px; }
-.layout--collapsed .side-item,
-.layout--collapsed .sidebar__collapse { justify-content: center; padding: 0; position: relative; }
+.layout--collapsed .side-item { justify-content: center; padding: 0; position: relative; }
 .layout--collapsed .side-item__dot { position: absolute; top: 7px; right: 9px; }
 .layout--collapsed .sidebar__hostcard { justify-content: center; padding: 0; }
-.layout--collapsed .sidebar__collapse svg { transform: scaleX(-1); }
+.sidebar-toggle[aria-expanded="false"] svg { transform: scaleX(-1); }
 
 /* ============ admin layout: responsive ============ */
 @media (max-width: 960px) {
@@ -1523,12 +1520,10 @@ kbd {
   .layout--collapsed .side-group__label,
   .layout--collapsed .side-item__label,
   .layout--collapsed .side-item__count,
-  .layout--collapsed .sidebar__host,
-  .layout--collapsed .sidebar__collapse-label { display: revert; }
-  .layout--collapsed .side-item,
-  .layout--collapsed .sidebar__collapse { justify-content: flex-start; padding: 0 10px; }
+  .layout--collapsed .sidebar__host { display: revert; }
+  .layout--collapsed .side-item { justify-content: flex-start; padding: 0 10px; }
   .layout--collapsed .side-item__dot { position: static; }
-  .sidebar__collapse { display: none; }
+  .sidebar-toggle { display: none; }
 }
 
 @media (max-width: 640px) {

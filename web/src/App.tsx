@@ -33,10 +33,16 @@ export function App() {
   return (
     <div className="shell">
       <FixtureBanner />
-      <Header onOpenPalette={() => setPaletteOpen(true)} navOpen={navOpen} onToggleNav={() => setNavOpen((o) => !o)} />
+      <Header
+        onOpenPalette={() => setPaletteOpen(true)}
+        navOpen={navOpen}
+        onToggleNav={() => setNavOpen((o) => !o)}
+        collapsed={collapsed}
+        onToggleSidebar={toggleSidebar}
+      />
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onToggleSidebar={toggleSidebar} />}
       <div className={`layout${navOpen ? " layout--nav-open" : ""}${collapsed ? " layout--collapsed" : ""}`}>
-        <Sidebar collapsed={collapsed} onToggleCollapsed={toggleSidebar} />
+        <Sidebar />
         {navOpen && <button type="button" className="layout__scrim" aria-label="Close menu" onClick={() => setNavOpen(false)} />}
         <main className="main">
           <Routes>
@@ -79,7 +85,19 @@ function Logo() {
   );
 }
 
-function Header({ onOpenPalette, navOpen, onToggleNav }: { onOpenPalette: () => void; navOpen: boolean; onToggleNav: () => void }) {
+function Header({
+  onOpenPalette,
+  navOpen,
+  onToggleNav,
+  collapsed,
+  onToggleSidebar,
+}: {
+  onOpenPalette: () => void;
+  navOpen: boolean;
+  onToggleNav: () => void;
+  collapsed: boolean;
+  onToggleSidebar: () => void;
+}) {
   const health = useHealth();
   const incidents = useIncidents();
   const host = health.data?.host_id ?? incidents.data?.[0]?.host_id;
@@ -97,6 +115,20 @@ function Header({ onOpenPalette, navOpen, onToggleNav }: { onOpenPalette: () => 
         >
           <span />
           <span />
+        </button>
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={onToggleSidebar}
+          aria-controls="sidebar"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={`${collapsed ? "Expand" : "Collapse"} sidebar (${MOD_KEY} B)`}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="2" y="2.5" width="12" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M6 2.5v11" stroke="currentColor" strokeWidth="1.4" />
+          </svg>
         </button>
         <NavLink to="/" className="brand" aria-label="Sentinell home">
           <Logo />

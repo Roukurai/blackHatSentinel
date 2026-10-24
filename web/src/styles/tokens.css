@@ -60,8 +60,8 @@
 
   --ds-focus-ring: 0 0 0 1px oklch(0.66 0.22 31 / 70%), 0 0 0 4px oklch(0.66 0.22 31 / 22%);
 
-  /* type: Sentient for reading, JetBrains Mono for interface and data */
-  --font-sans: "Sentient", "Iowan Old Style", "Charter", Georgia, serif;
+  /* type: Switzer for reading, JetBrains Mono for interface and data */
+  --font-sans: "Switzer", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* radii & motion */

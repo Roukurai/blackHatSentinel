@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useHealth, useLlmSettings, useSettingsOverview } from "../api/queries";
-import { MOD_KEY } from "../lib/hotkeys";
 import { useSetupProgress } from "./Setup";
 import { StatusDot, type Tone } from "./ui";
 
@@ -41,7 +40,7 @@ function Dot({ tone, title }: { tone: Tone; title: string }) {
   );
 }
 
-export function Sidebar({ collapsed, onToggleCollapsed }: { collapsed: boolean; onToggleCollapsed: () => void }) {
+export function Sidebar() {
   const { pathname } = useLocation();
   const progress = useSetupProgress();
   const health = useHealth();
@@ -95,20 +94,6 @@ export function Sidebar({ collapsed, onToggleCollapsed }: { collapsed: boolean; 
             <span className="muted">{overview.data?.dashboard_auth ? "Password protected" : "Localhost only"}</span>
           </span>
         </div>
-        <button
-          type="button"
-          className="sidebar__collapse"
-          onClick={onToggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={`${collapsed ? "Expand" : "Collapse"} sidebar (${MOD_KEY} B)`}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-            <rect x="2" y="2.5" width="12" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M6 2.5v11" stroke="currentColor" strokeWidth="1.4" />
-          </svg>
-          <span className="sidebar__collapse-label">Collapse</span>
-          <kbd>{MOD_KEY} B</kbd>
-        </button>
       </div>
     </aside>
   );

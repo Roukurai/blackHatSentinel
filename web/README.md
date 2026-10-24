@@ -11,9 +11,9 @@ identity from the landing page: warm dark palette (`#141210` / cream `#ece7dc`),
 accent (used only for attention), phosphor and amber, the shield mark. Mono type is reserved for data. Tokens live in
 `src/styles/tokens.css` (`--brand-*` primitives mapped onto the `--ds-*` names the layout uses).
 
-Fonts: JetBrains Mono (OFL) is bundled. Sentient is loaded from the Fontshare API because its
+Fonts: JetBrains Mono (OFL) is bundled. Switzer is loaded from the Fontshare API because its
 license (ITF FFL) does not allow redistributing the font files from a public repository; offline
-it falls back to a local serif, and nothing depends on it.
+it falls back to the system sans, and nothing depends on it.
 
 ## Run
 
@@ -28,8 +28,9 @@ npm run build          # type-check + production build into web/dist
 Routes: `/` incidents · `/incidents/:id` incident (Telegram deep link) · `/health` · `/setup` ·
 `/settings/ai` (BYOK) · `/settings/notifications` · `/settings/response` · `/settings/host`.
 
-Admin layout: a sidebar (Monitor / Configure) with live status dots. `⌘B` / `Ctrl+B` collapses it to an
-icon rail (remembered per browser); on small screens it toggles the drawer.
+Admin layout: a sidebar (Monitor / Configure) with live status dots. The toggle at the top left of the
+header, or `⌘B` / `Ctrl+B`, collapses it to an icon rail (remembered per browser); on small screens it
+toggles the drawer.
 
 Setup (`/setup`) is a step list driven only by what the host reports (`GET /settings/overview`,
 `/health`, `/settings/llm`): protect the dashboard, connect your AI provider (bring your own key, stored
