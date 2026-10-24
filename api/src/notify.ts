@@ -50,26 +50,49 @@ function markDelivered(db: DatabaseSync, incidentId: string, kind: string, chatI
   ).run(incidentId, kind, chatId);
 }
 
+function rememberChat(db: DatabaseSync, chatId: string): void {
+  db.prepare("INSERT OR IGNORE INTO telegram_recipients (chat_id, added_at) VALUES (?, ?)").run(
+    chatId,
+    new Date().toISOString(),
+  );
+}
+
+function privateChat(update: {
+  message?: { text?: string; chat?: { id?: number; type?: string } };
+  edited_message?: { text?: string; chat?: { id?: number; type?: string } };
+  my_chat_member?: { chat?: { id?: number; type?: string } };
+}): { id: string; text: string } | null {
+  const message = update.message ?? update.edited_message;
+  const chat = message?.chat ?? update.my_chat_member?.chat;
+  if (!chat || chat.type !== "private" || chat.id === undefined) return null;
+  return { id: String(chat.id), text: message?.text ?? "" };
+}
+
 async function syncLinkedChats(db: DatabaseSync, token: string): Promise<void> {
   const row = db.prepare("SELECT update_offset FROM telegram_offset WHERE id = 1").get() as { update_offset: number } | undefined;
   const offset = row?.update_offset ?? 0;
   const url = new URL(`https://api.telegram.org/bot${token}/getUpdates`);
   url.searchParams.set("timeout", "0");
-  url.searchParams.set("allowed_updates", JSON.stringify(["message"]));
+  url.searchParams.set("allowed_updates", JSON.stringify(["message", "edited_message", "my_chat_member"]));
   if (offset > 0) url.searchParams.set("offset", String(offset));
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   const payload = await response.json() as {
     ok?: boolean;
-    result?: Array<{ update_id: number; message?: { text?: string; chat?: { id?: number; type?: string } } }>;
+    result?: Array<{
+      update_id: number;
+      message?: { text?: string; chat?: { id?: number; type?: string } };
+      edited_message?: { text?: string; chat?: { id?: number; type?: string } };
+      my_chat_member?: { chat?: { id?: number; type?: string } };
+    }>;
   };
   if (!payload.ok || !payload.result) return;
   let next = offset;
   for (const update of payload.result) {
     next = Math.max(next, update.update_id + 1);
-    const chat = update.message?.chat;
-    if (chat?.type === "private" && chat.id !== undefined) {
-      tryBindTelegram(db, update.message?.text ?? "", String(chat.id));
-    }
+    const chat = privateChat(update);
+    if (!chat) continue;
+    rememberChat(db, chat.id);
+    tryBindTelegram(db, chat.text, chat.id);
   }
   if (next === offset) return;
   db.prepare(`
