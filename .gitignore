@@ -28,3 +28,6 @@ npm-debug.log*
 .idea/
 .vscode/
 *.swp
+
+# personal, uncommitted
+RUNBOOK-antonio.md
