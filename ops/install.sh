@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Minimal Sentinell install for one Ubuntu host (hackathon / self-host).
-# Intended to be served as https://sentinell.xyz/install.sh (Jordi/ops deploy).
+# Served at https://sentinell.xyz/install.sh
 #
 #   curl -fsSL https://sentinell.xyz/install.sh | sh
 #   # or from a clone:
@@ -69,7 +69,5 @@ Next:
                   Prefer TLS. See docs/MCP.md (never print a live token here).
      Claude:      claude mcp add sentinell -- sentinell mcp
   5. Health:     sentinell status
-
-Landing host note: publish this script at https://sentinell.xyz/install.sh
 
 EOF

@@ -1,6 +1,6 @@
 # Sentinell MCP (read-only)
 
-Status: **implemented in-repo** — Jordi wires [sentinell.xyz](https://sentinell.xyz/) Claude / Cursor / Grok Bot buttons to these snippets. Host `install.sh` at `https://sentinell.xyz/install.sh` (see [`ops/install.sh`](../ops/install.sh)).
+Status: **implemented in-repo** — Jordi wires [sentinell.xyz](https://sentinell.xyz/) Claude / Cursor / Grok Bot buttons to these snippets. `https://sentinell.xyz/install.sh` serves [`ops/install.sh`](../ops/install.sh).
 
 The MCP server exposes **read-only** tools. It never blocks IPs and never returns `raw_message` or API keys.
 
