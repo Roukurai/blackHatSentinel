@@ -38,6 +38,7 @@ On ubuntu-01 as `rou` (from a laptop copy of this repo, or after the first clone
     bash ops/setup-vps.sh --check
     bash ops/setup-vps.sh --apply --allow <team-ip> ...
     # edit /opt/sentinell/.env secrets (DASHBOARD_*, TELEGRAM_*; never commit)
+    # .env values must match [A-Za-z0-9:_.-] (file is sourced by bash; quotes are not stripped by the API)
     bash ops/setup-vps.sh --apply --start
     bash ops/setup-vps.sh --demo-user
     bash ops/setup-vps.sh --verify
@@ -52,5 +53,5 @@ Logs:
 `--check` is read-only. `--apply` is idempotent (skips phases already at target). Do not enable ufw; do not modify nft table `inet filter`.
 
 ## Reset between rehearsals
-    RESET_CONFIRM=1 ./ops/reset.sh    # wipes incident DB + nft blocklist, keeps the journal
+    sudo RESET_CONFIRM=1 bash ops/reset.sh    # wipes incident DB + nft blocklist, keeps the journal
     # RESET_SETTINGS=1 also removes llm-settings.json next to the DB

@@ -533,12 +533,20 @@ phase4_runner() {
     else
       diff_line "${SUDOERS_FILE} ${sudocontent:-missing}" "sentinel NOPASSWD sentinel-block"
     fi
-    local allc
-    allc=$(try_cat "$ALLOWLIST_FILE" 2>/dev/null || true)
-    if [[ $allc == "$(allowlist_body)" ]]; then
-      ok "$ALLOWLIST_FILE"
+    if [[ $ALLOW_GIVEN -eq 0 ]]; then
+      if sudo_n test -e "$ALLOWLIST_FILE" 2>/dev/null || [[ -e $ALLOWLIST_FILE ]]; then
+        ok "(kept; pass --allow to change)"
+      else
+        diff_line "$ALLOWLIST_FILE missing" "write VPS IP only (pass --allow to set team IPs)"
+      fi
     else
-      diff_line "$ALLOWLIST_FILE differs or missing" "VPS IP + --allow entries"
+      local allc
+      allc=$(try_cat "$ALLOWLIST_FILE" 2>/dev/null || true)
+      if [[ $allc == "$(allowlist_body)" ]]; then
+        ok "$ALLOWLIST_FILE"
+      else
+        diff_line "$ALLOWLIST_FILE differs or missing" "VPS IP + --allow entries"
+      fi
     fi
     return 0
   fi
@@ -557,15 +565,27 @@ phase4_runner() {
   sudo chown root:root /etc/sentinel
   sudo chmod 0755 /etc/sentinel
 
-  tmp=$(mktemp)
-  allowlist_body >"$tmp"
-  if sudo_n test -e "$ALLOWLIST_FILE" 2>/dev/null && sudo_n cmp -s "$tmp" "$ALLOWLIST_FILE" 2>/dev/null; then
-    rm -f "$tmp"
-    ok "$ALLOWLIST_FILE (unchanged)"
+  if [[ $ALLOW_GIVEN -eq 0 ]]; then
+    if sudo_n test -e "$ALLOWLIST_FILE" 2>/dev/null || [[ -e $ALLOWLIST_FILE ]]; then
+      ok "(kept; pass --allow to change)"
+    else
+      tmp=$(mktemp)
+      allowlist_body >"$tmp"
+      sudo install -m 0644 -o root -g root "$tmp" "$ALLOWLIST_FILE"
+      rm -f "$tmp"
+      ok "$ALLOWLIST_FILE (VPS IP only)"
+    fi
   else
-    sudo install -m 0644 -o root -g root "$tmp" "$ALLOWLIST_FILE"
-    rm -f "$tmp"
-    ok "$ALLOWLIST_FILE"
+    tmp=$(mktemp)
+    allowlist_body >"$tmp"
+    if sudo_n test -e "$ALLOWLIST_FILE" 2>/dev/null && sudo_n cmp -s "$tmp" "$ALLOWLIST_FILE" 2>/dev/null; then
+      rm -f "$tmp"
+      ok "$ALLOWLIST_FILE (unchanged)"
+    else
+      sudo install -m 0644 -o root -g root "$tmp" "$ALLOWLIST_FILE"
+      rm -f "$tmp"
+      ok "$ALLOWLIST_FILE"
+    fi
   fi
 }
 
