@@ -72,6 +72,13 @@ report, notify). Humans approve only actions that could lock someone out.
 | Unsafe IP block (allowlisted) | Rejected even after approval |
 | Action succeeds | Result, verification, expiry/rollback recorded |
 
+## Backlog (Linear)
+
+- Jordi’s Linear workspace tracks ideas **outside** the current CONTRACT / P0 demo scope
+  (post-checkpoint polish, P2 extras, deferred features).
+- In-scope hackathon work ships via GitHub PRs with conventional commit prefixes.
+- Changing `docs/CONTRACT.md` still requires team agreement — a Linear issue alone is not enough.
+
 ## Git workflow
 
 - Small commits, `git pull --rebase` before every push. Never force-push `main`.
