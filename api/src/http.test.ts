@@ -257,6 +257,17 @@ test("POST /mcp requires Bearer token; tools/list works with valid token", async
   });
   assert.equal(basic.status, 401);
 
+  // Bare Authorization: sntl_mcp_… (no Bearer) must work
+  const bare = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: token,
+    },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(bare.status, 200);
+
   const ok = await fetch(`${base}/mcp`, {
     method: "POST",
     headers: {
@@ -269,7 +280,11 @@ test("POST /mcp requires Bearer token; tools/list works with valid token", async
   const listed = await ok.json() as {
     result?: { tools?: Array<{ name: string }> };
   };
-  assert.ok(listed.result?.tools?.some((t) => t.name === "health"));
+  const names = listed.result?.tools?.map((t) => t.name) ?? [];
+  assert.ok(names.includes("list_incidents"));
+  assert.ok(names.includes("list_alerts"));
+  assert.ok(names.includes("get_investigation"));
+  assert.ok(names.includes("health"));
 
   const other = createMcpToken(db, "cursor");
   assert.ok(revokeMcpToken(db, meta.id));
@@ -300,6 +315,124 @@ test("POST /mcp requires Bearer token; tools/list works with valid token", async
   await once(server, "close");
   db.close();
 });
+
+test("POST /mcp Streamable HTTP initialize, session, notifications, list_alerts", async () => {
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config(),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const { token } = createMcpToken(db, "inspector");
+
+  const options = await fetch(`${base}/mcp`, { method: "OPTIONS" });
+  assert.equal(options.status, 204);
+  assert.equal(options.headers.get("access-control-allow-headers")?.includes("Authorization"), true);
+
+  const get = await fetch(`${base}/mcp`, {
+    method: "GET",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(get.status, 405);
+
+  const init = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "0" },
+      },
+    }),
+  });
+  assert.equal(init.status, 200);
+  const session = init.headers.get("mcp-session-id");
+  assert.ok(session);
+  const initBody = await init.json() as { result: { protocolVersion: string } };
+  assert.equal(initBody.result.protocolVersion, "2025-03-26");
+
+  const notified = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      "mcp-session-id": session!,
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+  });
+  assert.equal(notified.status, 202);
+
+  // Seed a sent notification via ingest so list_alerts has a row for "today"
+  const today = new Date().toISOString().slice(0, 10);
+  const events = [1, 2, 3, 4, 5].map((port) => ({
+    event_id: createHash("sha256").update(`mcp-alert-${port}`).digest("hex"),
+    host_id: "ubuntu-01",
+    timestamp: `${today}T12:00:0${port}.000Z`,
+    type: "ssh_invalid_user" as const,
+    username: "root",
+    source_ip: "203.0.113.88",
+    source_port: 42000 + port,
+    raw_message: "RAW",
+    origin: "replay" as const,
+  }));
+  await fetch(`${base}/events`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(events),
+  });
+
+  const alerts = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      "mcp-session-id": session!,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "list_alerts", arguments: { date: today } },
+    }),
+  });
+  assert.equal(alerts.status, 200);
+  const alertRpc = await alerts.json() as {
+    result: { content: Array<{ text: string }> };
+  };
+  const alertRows = JSON.parse(alertRpc.result.content[0].text) as Array<{ status: string }>;
+  assert.ok(alertRows.length >= 1);
+  assert.equal(alertRows[0].status, "sent");
+
+  const badSession = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      "mcp-session-id": "deadbeef",
+    },
+    body: JSON.stringify(rpcListSafe()),
+  });
+  assert.equal(badSession.status, 404);
+
+  server.close();
+  await once(server, "close");
+  db.close();
+});
+
+function rpcListSafe() {
+  return { jsonrpc: "2.0", id: 9, method: "tools/list", params: {} };
+}
 
 test("session login gates JSON and leaves the dashboard shell public", async () => {
   const dist = mkdtempSync(path.join(tmpdir(), "sentinel-login-"));
