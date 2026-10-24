@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { alertText } from "./alert.ts";
 import {
   claimNotification,
+  eventsByIds,
   incidentById,
   listDueIncidents,
   saveIncident,
@@ -71,7 +72,10 @@ export async function flushNotifications(
     if (!claimNotification(db, incident.id)) continue;
     const current = incidentById(db, incident.id);
     if (!current?.pendingKind) continue;
-    const text = alertText(toIncident(current), config.publicBaseUrl, current.pendingKind);
+    const events = eventsByIds(db, current.eventIds);
+    const replay = events.filter((event) => event.origin === "replay").length;
+    const origin = replay === 0 ? "live" : replay === events.length ? "replay" : "mixed";
+    const text = alertText(toIncident(current), config.publicBaseUrl, current.pendingKind, origin);
     try {
       await deliver(text);
       markSent(current);

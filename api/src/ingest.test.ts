@@ -124,6 +124,10 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
     assert.equal(text.includes("admin"), false);
     assert.equal(text.includes("compromised"), false);
     assert.match(text, /^Sentinel \/ suspicious SSH activity\nHost: ubuntu-01\nSource: /);
+    assert.match(text, /Failed attempts: \d+/);
+    assert.match(text, /Events: \d+/);
+    assert.match(text, /Accounts tried: \d+/);
+    assert.match(text, /Origin: replay/);
     assert.match(text, /Status: investigation pending/);
   }
   assert.match(sent[1], /Severity: high/);
