@@ -62,7 +62,8 @@ Next:
      Or start the API and set the OpenAI key in the dashboard Settings page (BYO).
   2. Start API:  cd $INSTALL_DIR/api && npm start
   3. Put $BIN_DIR on PATH if needed:  export PATH="$BIN_DIR:\$PATH"
-  4. Open the dashboard and create the password.
+  4. Open the dashboard and create the password. It asks for the one-time setup token:
+     sudo cat <data dir>/setup-token   (the API log prints the exact path)
      MCP local:   sentinell mcp
      MCP remote:  sentinell mcp token create --name <agent>
                   then POST https://<host>/mcp with Authorization: Bearer <token>
