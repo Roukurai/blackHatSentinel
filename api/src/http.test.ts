@@ -106,6 +106,7 @@ test("localhost ingest creates an incident and serves it", async () => {
     llm: "down",
     telegram: "ok",
     db: "ok",
+    host_id: null,
   });
 
   const rejected = await fetch(`${base}/events`, {

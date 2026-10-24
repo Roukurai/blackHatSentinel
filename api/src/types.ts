@@ -56,7 +56,36 @@ export interface Incident {
     last_attempt_at: string | null;
   };
   investigation: Investigation | null;
-  action: null;
+  action: ResponseAction | null;
+  origin?: Origin | "mixed";
+}
+
+export type ActionStatus =
+  | "proposed"
+  | "rejected_by_policy"
+  | "approved"
+  | "applied"
+  | "verified"
+  | "expired"
+  | "rolled_back"
+  | "failed";
+
+export interface ResponseAction {
+  id: string;
+  kind: "block_ip";
+  target: string;
+  ttl_seconds: number;
+  status: ActionStatus;
+  policy_reason: string | null;
+  applied_at: string | null;
+  expires_at: string | null;
+}
+
+export interface ResponseConfig {
+  allowlist: string[];
+  ttlSeconds: number;
+  runner: string;
+  runnerSudo: boolean;
 }
 
 export interface DetectConfig {
@@ -78,4 +107,7 @@ export interface Config {
   notifyCooldownSeconds: number;
   detect: DetectConfig;
   llmBaseUrl: string;
+  hostId?: string;
+  webDist?: string;
+  response?: ResponseConfig;
 }

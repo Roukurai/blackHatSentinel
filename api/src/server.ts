@@ -3,17 +3,19 @@ import { timingSafeEqual } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { addCounter, eventsByIds, hasFailedNotification, incidentById, latestEventTimestamp, listIncidentRecords, toIncident } from "./db.ts";
 import { ingest } from "./ingest.ts";
+import { ActionError, actionForIncident, approveAction, ensureActionsTable, rejectAction } from "./actions.ts";
 import {
   createApiInvestigator,
-  enqueueInvestigations,
   handleInvestigateRoute,
   healthLlmField,
   persistInvestigationResult,
 } from "./investigate.ts";
-import { flushNotifications, type SendText } from "./notify.ts";
-import type { Config } from "./types.ts";
+import type { SendText } from "./notify.ts";
+import { flushAndFollowUp } from "./pipeline.ts";
+import type { Config, Incident, SentinelEvent } from "./types.ts";
 import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
+import { serveWeb } from "./web.ts";
 
 export interface ServerOptions {
   config: Config;
@@ -87,8 +89,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
       throw new ValidationError("body must be JSON");
     }
     const result = ingest(db, body, config);
-    const notified = await flushNotifications(db, config, options.send);
-    enqueueInvestigations(investigator, db, notified);
+    await flushAndFollowUp(db, config, investigator, options.send);
     sendJson(res, 200, result);
     return;
   }
@@ -98,18 +99,21 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     throw new HttpError(401, "unauthorized");
   }
 
+  if (config.webDist && (await serveWeb(req, res, config.webDist, path))) return;
+
   if (path === "/health" && req.method === "GET") {
     sendJson(res, 200, {
       collector_last_event_at: latestEventTimestamp(db),
       llm: healthLlmField(investigator),
       telegram: config.telegramToken && config.telegramChatId && !hasFailedNotification(db) ? "ok" : "failed",
       db: "ok",
+      host_id: config.hostId ?? null,
     });
     return;
   }
 
   if (path === "/incidents" && req.method === "GET") {
-    sendJson(res, 200, listIncidentRecords(db).map(toIncident));
+    sendJson(res, 200, listIncidentRecords(db).map((record) => withResponse(db, toIncident(record), eventsByIds(db, record.eventIds))));
     return;
   }
 
@@ -129,14 +133,35 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     if (!/^inc-\d+$/.test(id)) throw new HttpError(404, "not found");
     const record = incidentById(db, id);
     if (!record) throw new HttpError(404, "not found");
-    sendJson(res, 200, { ...toIncident(record), events: eventsByIds(db, record.eventIds) });
+    const events = eventsByIds(db, record.eventIds);
+    sendJson(res, 200, { ...withResponse(db, toIncident(record), events), events });
+    return;
+  }
+
+  const actionRoute = /^\/actions\/(act-\d+)\/(approve|reject)$/.exec(path);
+  if (actionRoute && req.method === "POST") {
+    const [, actionId, decision] = actionRoute as unknown as [string, string, "approve" | "reject"];
+    if (!config.response) throw new HttpError(503, "response actions are not configured");
+    const action = decision === "approve" ? await approveAction(db, actionId, config.response) : rejectAction(db, actionId);
+    sendJson(res, 200, action);
     return;
   }
 
   throw new HttpError(404, "not found");
 }
 
+function originOf(events: SentinelEvent[]): Incident["origin"] {
+  const replay = events.filter((event) => event.origin === "replay").length;
+  if (replay === 0) return "live";
+  return replay === events.length ? "replay" : "mixed";
+}
+
+function withResponse(db: DatabaseSync, incident: Incident, events: SentinelEvent[]): Incident {
+  return { ...incident, action: actionForIncident(db, incident.id), origin: originOf(events) };
+}
+
 export function createServer(options: ServerOptions): Server {
+  ensureActionsTable(options.db);
   const investigator = options.investigator ?? createApiInvestigator(options.db);
   const opts: ServerOptions = { ...options, investigator };
   return createHttpServer((req, res) => {
@@ -148,7 +173,7 @@ export function createServer(options: ServerOptions): Server {
         sendJson(res, 400, { error: err.message });
         return;
       }
-      if (err instanceof HttpError) {
+      if (err instanceof HttpError || err instanceof ActionError) {
         sendJson(res, err.status, { error: err.message });
         return;
       }

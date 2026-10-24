@@ -64,6 +64,9 @@ export function enqueueInvestigations(
   for (const id of unique) {
     const record = incidentById(db, id);
     if (!record) continue;
+    // Telegram retries re-list the same incident; only investigate when something is new.
+    if (record.status === "investigating") continue;
+    if (record.investigation && record.investigation.created_at >= record.lastSeen) continue;
     record.status = "investigating";
     saveIncident(db, record);
     scheduleInvestigation(investigator, id, async (incidentId, inv) => {
