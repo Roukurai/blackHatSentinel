@@ -1,0 +1,30 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# data (never commit raw logs or databases)
+*.db
+*.sqlite
+*.sqlite3
+*.jsonl
+replay/
+data/
+
+# rust
+collector/target/
+target/
+
+# node
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
