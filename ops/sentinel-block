@@ -2,65 +2,340 @@
 # Sentinel response runner: the only privileged code path for P1 IP blocks.
 # Fixed command set, strict argument validation, no shell interpolation of input.
 #
+# Usage:
 #   sentinel-block block <ip> <ttl_seconds>   add a temporary element to the blocklist
 #   sentinel-block verify <ip>                exit 0 if <ip> is currently blocked
 #   sentinel-block unblock <ip>               remove <ip> early (rollback)
+#   sentinel-block list                       print inet sentinel blocklist sets
+#
+# Exit codes:
+#   0  success
+#   1  nft failure / verify: IP not present or drop rule missing
+#   2  bad arguments (usage, invalid IP, invalid TTL, unknown command)
+#   3  refused by runner policy (special address, host IP, allowlist)
+#
+# Allowlist file (optional): /etc/sentinel/allowlist
+#   Ownership: root:root, mode 0644 (not group/world-writable). Required when the
+#   file exists and this script runs as root. Format: one entry per line, '#'
+#   comments, blank lines ok. IPv4 address or IPv4 CIDR; IPv6 bare address only.
 #
 # Install (root):
 #   install -m 0755 -o root -g root ops/sentinel-block /usr/local/sbin/sentinel-block
-#   echo 'sentinel ALL=(root) NOPASSWD: /usr/local/sbin/sentinel-block' > /etc/sudoers.d/sentinel-block
+#   echo '<api_user> ALL=(root) NOPASSWD: /usr/local/sbin/sentinel-block' > /etc/sudoers.d/sentinel-block
 #   chmod 0440 /etc/sudoers.d/sentinel-block
+# The sudoers user MUST be the account that runs the API (not the collector).
 # API .env: RESPONSE_RUNNER=/usr/local/sbin/sentinel-block  RESPONSE_RUNNER_SUDO=1
 #
-# Policy (allowlist, own IPs) is enforced by the API before calling this script.
+# SENTINEL_BLOCK_NFT and SENTINEL_BLOCK_ALLOWLIST exist for tests only.
+# sudo env_reset strips them; sudoers must NOT env_keep SENTINEL_BLOCK_*.
 set -euo pipefail
 
 MAX_TTL=86400
+NFT="${SENTINEL_BLOCK_NFT:-/usr/sbin/nft}"
+ALLOWLIST="${SENTINEL_BLOCK_ALLOWLIST:-/etc/sentinel/allowlist}"
 
-die() { echo "sentinel-block: $*" >&2; exit 2; }
+usage_die() { echo "sentinel-block: $*" >&2; exit 2; }
+nft_fail() { echo "sentinel-block: $*" >&2; exit 1; }
+refuse() { echo "sentinel-block: refused: $*" >&2; exit 3; }
 
-[[ $# -ge 2 ]] || die "usage: sentinel-block block|verify|unblock <ip> [ttl_seconds]"
+[[ $# -ge 1 ]] || usage_die "usage: sentinel-block block|verify|unblock|list [ip] [ttl_seconds]"
 cmd=$1
-ip=$2
 
-if [[ $ip =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
-  for octet in "${BASH_REMATCH[@]:1}"; do (( octet <= 255 )) || die "invalid IPv4"; done
-  set_name=blocklist
-elif [[ $ip =~ ^[0-9A-Fa-f:]+$ && $ip == *:* && ${#ip} -le 39 ]]; then
-  set_name=blocklist6
-else
-  die "invalid IP"
-fi
-
-ensure_table() {
-  nft list table inet sentinel >/dev/null 2>&1 && return 0
-  nft -f - <<'EOF'
-table inet sentinel {
-  set blocklist  { type ipv4_addr; flags timeout; }
-  set blocklist6 { type ipv6_addr; flags timeout; }
-  chain input {
-    type filter hook input priority -10; policy accept;
-    ip saddr @blocklist drop
-    ip6 saddr @blocklist6 drop
-  }
+is_ipv4() {
+  local candidate=$1
+  [[ $candidate =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})$ ]] || return 1
+  local a=${BASH_REMATCH[1]} b=${BASH_REMATCH[2]} c=${BASH_REMATCH[3]} d=${BASH_REMATCH[4]}
+  (( a <= 255 && b <= 255 && c <= 255 && d <= 255 ))
 }
-EOF
+
+is_ipv6_shape() {
+  local candidate=$1
+  [[ $candidate =~ ^[0-9A-Fa-f:]+$ ]] || return 1
+  [[ $candidate == *:* ]] || return 1
+  (( ${#candidate} <= 39 )) || return 1
+  [[ $candidate != *:::* ]]
+}
+
+canonicalize_ipv6() {
+  local candidate=$1
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import ipaddress,sys;print(ipaddress.IPv6Address(sys.argv[1]).compressed)' "$candidate"
+  else
+    printf '%s\n' "$candidate" | tr 'A-F' 'a-f'
+  fi
+}
+
+ipv4_to_int() {
+  local a b c d
+  IFS=. read -r a b c d <<< "$1"
+  echo $(( a * 16777216 + b * 65536 + c * 256 + d ))
+}
+
+ipv4_in_cidr() {
+  local ip=$1 net=$2 prefix=$3
+  local ipi neti mask
+  ipi=$(ipv4_to_int "$ip")
+  neti=$(ipv4_to_int "$net")
+  if (( prefix == 0 )); then
+    mask=0
+  else
+    mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+  fi
+  (( (ipi & mask) == (neti & mask) ))
+}
+
+parse_target() {
+  local raw=$1
+  if is_ipv4 "$raw"; then
+    family=ipv4
+    ip=$raw
+    set_name=blocklist
+    return 0
+  fi
+  if is_ipv6_shape "$raw"; then
+    local canon rc
+    set +e
+    canon=$(canonicalize_ipv6 "$raw" 2>/dev/null)
+    rc=$?
+    set -e
+    [[ $rc -eq 0 && -n $canon ]] || usage_die "invalid IPv6"
+    family=ipv6
+    ip=$canon
+    set_name=blocklist6
+    return 0
+  fi
+  usage_die "invalid IP"
+}
+
+refuse_special() {
+  local a
+  if [[ $family == ipv4 ]]; then
+    IFS=. read -r a _ _ _ <<< "$ip"
+    [[ $ip != 0.0.0.0 ]] || refuse "unspecified address"
+    [[ $ip != 255.255.255.255 ]] || refuse "broadcast address"
+    (( a != 127 )) || refuse "loopback address"
+    if (( a >= 224 && a <= 239 )); then refuse "multicast address"; fi
+    return 0
+  fi
+  [[ $ip != :: ]] || refuse "unspecified address"
+  [[ $ip != ::1 ]] || refuse "loopback address"
+  [[ $ip != ff* && $ip != FF* ]] || refuse "multicast address"
+}
+
+# Skip loopback when collecting "don't block ourselves" addresses. 127/::1 are
+# still refused via refuse_special. Production fail-closed: missing ip(8) or no
+# non-loopback address. Tests set SENTINEL_BLOCK_NFT to a stub (not /usr/sbin/nft);
+# on Darwin ip(8) is absent, so skip host discovery only in that test override.
+# When NFT is the production default /usr/sbin/nft and ip is missing → fail closed.
+collect_host_ips() {
+  host_ips=()
+  if command -v ip >/dev/null 2>&1; then
+    local cidr addr usable=0
+    while read -r _ _ _ cidr _; do
+      [[ -n ${cidr:-} ]] || continue
+      addr=${cidr%%/*}
+      if [[ $addr == 127.* || $addr == ::1 ]]; then
+        continue
+      fi
+      host_ips+=("$addr")
+      usable=1
+    done < <(ip -o addr show 2>/dev/null || true)
+    if (( usable == 0 )); then
+      refuse "host address discovery failed"
+    fi
+    return 0
+  fi
+  if [[ $NFT != /usr/sbin/nft ]]; then
+    return 0
+  fi
+  refuse "host address discovery failed"
+}
+
+host_equals_target() {
+  local addr canon rc
+  for addr in "${host_ips[@]+"${host_ips[@]}"}"; do
+    if [[ $family == ipv4 ]]; then
+      [[ $addr == "$ip" ]] && return 0
+      continue
+    fi
+    if [[ $addr == *:* ]]; then
+      set +e
+      canon=$(canonicalize_ipv6 "$addr" 2>/dev/null)
+      rc=$?
+      set -e
+      [[ $rc -eq 0 && $canon == "$ip" ]] && return 0
+    fi
+  done
+  return 1
+}
+
+# Ownership check is skipped when not root so unprivileged tests can point
+# SENTINEL_BLOCK_ALLOWLIST at a temp file. Production runs as root via sudo.
+check_allowlist() {
+  if [[ ! -e $ALLOWLIST ]]; then
+    echo "sentinel-block: warning: allowlist file missing ($ALLOWLIST); runner allowlist skipped" >&2
+    return 0
+  fi
+  if [[ $(id -u) -eq 0 ]]; then
+    local st uid mode
+    st=$(stat -c '%u %a' "$ALLOWLIST")
+    uid=${st%% *}
+    mode=${st##* }
+    if [[ $uid != 0 ]] || (( (8#$mode) & 022 )); then
+      refuse "allowlist file insecure"
+    fi
+  else
+    echo "sentinel-block: SKIP allowlist ownership check (not root; test-only)" >&2
+  fi
+
+  local line raw n=0 prefix net canon rc
+  while IFS= read -r line || [[ -n $line ]]; do
+    n=$((n + 1))
+    raw=${line%%#*}
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    raw="${raw%"${raw##*[![:space:]]}"}"
+    [[ -n $raw ]] || continue
+    if [[ $raw =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})/([0-9]|[12][0-9]|3[0-2])$ ]]; then
+      net=${raw%/*}
+      prefix=${raw#*/}
+      is_ipv4 "$net" || refuse "allowlist parse error line $n"
+      if [[ $family == ipv4 ]] && ipv4_in_cidr "$ip" "$net" "$prefix"; then
+        refuse "target in allowlist"
+      fi
+      continue
+    fi
+    if is_ipv4 "$raw"; then
+      if [[ $family == ipv4 ]] && ipv4_in_cidr "$ip" "$raw" 32; then
+        refuse "target in allowlist"
+      fi
+      continue
+    fi
+    if is_ipv6_shape "$raw"; then
+      set +e
+      canon=$(canonicalize_ipv6 "$raw" 2>/dev/null)
+      rc=$?
+      set -e
+      [[ $rc -eq 0 && -n $canon ]] || refuse "allowlist parse error line $n"
+      if [[ $family == ipv6 && $canon == "$ip" ]]; then
+        refuse "target in allowlist"
+      fi
+      continue
+    fi
+    refuse "allowlist parse error line $n"
+  done < "$ALLOWLIST"
+}
+
+chain_has_v4_drop() {
+  grep -q 'sentinel-drop-v4' <<<"$1" || grep -q 'ip saddr @blocklist drop' <<<"$1"
+}
+
+chain_has_v6_drop() {
+  grep -q 'sentinel-drop-v6' <<<"$1" || grep -q 'ip6 saddr @blocklist6 drop' <<<"$1"
+}
+
+ensure_ruleset() {
+  if ! "$NFT" list table inet sentinel >/dev/null 2>&1; then
+    "$NFT" add table inet sentinel || nft_fail "nft add table failed"
+  fi
+  if ! "$NFT" list set inet sentinel blocklist >/dev/null 2>&1; then
+    "$NFT" add set inet sentinel blocklist '{ type ipv4_addr; flags timeout; }' || nft_fail "nft add set blocklist failed"
+  fi
+  if ! "$NFT" list set inet sentinel blocklist6 >/dev/null 2>&1; then
+    "$NFT" add set inet sentinel blocklist6 '{ type ipv6_addr; flags timeout; }' || nft_fail "nft add set blocklist6 failed"
+  fi
+  if ! "$NFT" list chain inet sentinel input >/dev/null 2>&1; then
+    "$NFT" add chain inet sentinel input '{ type filter hook input priority -10; policy accept; }' || nft_fail "nft add chain failed"
+  fi
+  local chain
+  chain=$("$NFT" list chain inet sentinel input 2>/dev/null) || nft_fail "nft list chain failed"
+  if ! chain_has_v4_drop "$chain"; then
+    "$NFT" add rule inet sentinel input ip saddr @blocklist drop comment "sentinel-drop-v4" || nft_fail "nft add v4 drop rule failed"
+  fi
+  if ! chain_has_v6_drop "$chain"; then
+    "$NFT" add rule inet sentinel input ip6 saddr @blocklist6 drop comment "sentinel-drop-v6" || nft_fail "nft add v6 drop rule failed"
+  fi
+}
+
+set_contains_ip() {
+  local listing
+  listing=$("$NFT" list set inet sentinel "$set_name" 2>/dev/null) || return 1
+  grep -qwF -- "$ip" <<<"$listing"
+}
+
+drop_rule_present() {
+  local chain
+  chain=$("$NFT" list chain inet sentinel input 2>/dev/null) || return 1
+  if [[ $set_name == blocklist ]]; then
+    chain_has_v4_drop "$chain"
+  else
+    chain_has_v6_drop "$chain"
+  fi
+}
+
+verify_blocked() {
+  set_contains_ip && drop_rule_present
+}
+
+do_block() {
+  [[ $# -eq 3 ]] || usage_die "usage: sentinel-block block <ip> <ttl_seconds>"
+  parse_target "$2"
+  refuse_special
+  local ttl=$3
+  [[ $ttl =~ ^[1-9][0-9]*$ ]] || usage_die "ttl_seconds must be a positive integer"
+  (( ttl >= 1 && ttl <= MAX_TTL )) || usage_die "ttl_seconds out of range (1..$MAX_TTL)"
+  collect_host_ips
+  if host_equals_target; then
+    refuse "target is a host address"
+  fi
+  check_allowlist
+  ensure_ruleset
+  local err rc
+  set +e
+  err=$("$NFT" add element inet sentinel "$set_name" "{ $ip timeout ${ttl}s }" 2>&1)
+  rc=$?
+  set -e
+  [[ $rc -eq 0 ]] || nft_fail "$err"
+  verify_blocked || nft_fail "element not present after add"
+}
+
+do_verify() {
+  [[ $# -eq 2 ]] || usage_die "usage: sentinel-block verify <ip>"
+  parse_target "$2"
+  refuse_special
+  verify_blocked || exit 1
+}
+
+do_unblock() {
+  [[ $# -eq 2 ]] || usage_die "usage: sentinel-block unblock <ip>"
+  parse_target "$2"
+  refuse_special
+  local err rc
+  set +e
+  err=$("$NFT" delete element inet sentinel "$set_name" "{ $ip }" 2>&1)
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]]; then
+    return 0
+  fi
+  if [[ $err == *"No such file or directory"* ]]; then
+    return 0
+  fi
+  nft_fail "$err"
+}
+
+do_list() {
+  [[ $# -eq 1 ]] || usage_die "usage: sentinel-block list"
+  set +e
+  "$NFT" list set inet sentinel blocklist 2>/dev/null
+  "$NFT" list set inet sentinel blocklist6 2>/dev/null
+  set -e
+  return 0
 }
 
 case $cmd in
-  block)
-    [[ $# -eq 3 && $3 =~ ^[0-9]+$ ]] || die "ttl_seconds must be a positive integer"
-    (( $3 >= 1 && $3 <= MAX_TTL )) || die "ttl_seconds out of range (1..$MAX_TTL)"
-    ensure_table
-    nft add element inet sentinel "$set_name" "{ $ip timeout ${3}s }"
-    ;;
-  verify)
-    nft list set inet sentinel "$set_name" 2>/dev/null | grep -qw -- "$ip"
-    ;;
-  unblock)
-    nft delete element inet sentinel "$set_name" "{ $ip }"
-    ;;
-  *)
-    die "unknown command: $cmd"
-    ;;
+  block) do_block "$@" ;;
+  verify) do_verify "$@" ;;
+  unblock) do_unblock "$@" ;;
+  list) do_list "$@" ;;
+  *) usage_die "unknown command: $cmd" ;;
 esac
