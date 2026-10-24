@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { openDatabase } from "./db.ts";
+import { createMcpToken, revokeMcpToken } from "./mcp/tokens.ts";
 import { createServer } from "./server.ts";
 import type { Config, SentinelEvent } from "./types.ts";
 
@@ -186,6 +187,107 @@ test("dashboard routes require basic auth when credentials are set", async () =>
     headers: { authorization: `Basic ${Buffer.from("analyst:secret").toString("base64")}` },
   });
   assert.equal(allowed.status, 200);
+
+  server.close();
+  await once(server, "close");
+  db.close();
+});
+
+test("POST /mcp requires Bearer token; tools/list works with valid token", async () => {
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config({ dashboardUser: "analyst", dashboardPass: "secret" }),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
+
+  const rpcList = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/list",
+    params: {},
+  };
+
+  // No tokens yet → remote disabled
+  const disabled = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(disabled.status, 503);
+
+  const { token, meta } = createMcpToken(db, "grok");
+
+  const missing = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(missing.status, 401);
+
+  const bad = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: "Bearer sntl_mcp_not-a-real-token-xxxxxxxxxxxx",
+    },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(bad.status, 401);
+
+  // Basic auth must not unlock /mcp
+  const basic = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Basic ${Buffer.from("analyst:secret").toString("base64")}`,
+    },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(basic.status, 401);
+
+  const ok = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(ok.status, 200);
+  const listed = await ok.json() as {
+    result?: { tools?: Array<{ name: string }> };
+  };
+  assert.ok(listed.result?.tools?.some((t) => t.name === "health"));
+
+  const other = createMcpToken(db, "cursor");
+  assert.ok(revokeMcpToken(db, meta.id));
+  // Revoked token → 401 while another token keeps remote enabled
+  const revoked = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(revoked.status, 401);
+
+  assert.ok(revokeMcpToken(db, other.meta.id));
+  // No active tokens → remote disabled (503)
+  const disabledAgain = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${other.token}`,
+    },
+    body: JSON.stringify(rpcList),
+  });
+  assert.equal(disabledAgain.status, 503);
 
   server.close();
   await once(server, "close");
