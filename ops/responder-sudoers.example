@@ -1,0 +1,16 @@
+# Install on ubuntu-01 (do not copy blindly without replacing <app_user>):
+#   sudo install -m 440 ops/responder-sudoers.example /etc/sudoers.d/sentinel-responder
+#   sudo visudo -cf /etc/sudoers.d/sentinel-responder
+#
+# <app_user> is the non-root user that runs the API (the process that shells
+# out to this helper). Never the collector-only journal user unless they are
+# the same account.
+#
+# Keep the allowlist/TTL env vars so the binary can re-check policy after sudo
+# resets the environment. The API must invoke an argv vector, never a shell:
+#   sudo -n --preserve-env=RESPONSE_ALLOWLIST,RESPONSE_BLOCK_TTL_SECONDS \
+#     /usr/local/bin/sentinel-responder block <IP>
+
+Defaults:<app_user> env_keep += "RESPONSE_ALLOWLIST RESPONSE_BLOCK_TTL_SECONDS"
+
+<app_user> ALL=(root) NOPASSWD: /usr/local/bin/sentinel-responder
