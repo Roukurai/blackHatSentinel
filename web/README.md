@@ -30,13 +30,18 @@ Routes: `/` incidents · `/incidents/:id` incident (Telegram deep link) · `/hea
 `⌘K` / `Ctrl+K` opens the command menu: jump to a page or search incidents by IP, ID, severity,
 status or pattern. It only navigates; approving a block always goes through the incident's dialog.
 
-## API assumptions (pending agreement, see docs/CONTRACT.md)
+## API integration (checked against `api/` on the `kevin` branch)
 
-- JSON API under `VITE_API_BASE` (default `/api`) so `/incidents/:id` can be the SPA deep link.
-  The API should serve `index.html` for other GETs. Set `VITE_API_BASE=""` if routes stay at root.
-- `GET /incidents/:id` returns `Incident & { events: SentinelEvent[] }`.
-- Optional extras the UI uses when present: `Incident.origin`, `Health.host_id`.
-- Basic auth is handled by the browser's native prompt; no credentials live in this code.
+- JSON at the root: `GET /health`, `GET /incidents`, `GET /incidents/:id` (`Incident & { events }`).
+  Requests send `Accept: application/json`; `/incidents/:id` is also the SPA deep link used in
+  Telegram, so whoever serves `web/dist` must return `index.html` for `Accept: text/html`
+  navigations (the Vite dev proxy already does this). `VITE_API_BASE` sets a prefix if the API moves.
+- Basic auth: the API answers 401 with `WWW-Authenticate`; the browser prompts and caches the
+  credentials. No credentials live in this code.
+- Used when present, not yet sent by the API: `Incident.origin` (list Replay badge; events already
+  carry `origin`), `Health.host_id` (header falls back to the incidents' `host_id`).
+- `POST /incidents/:id/investigate` and `POST /actions/:id/approve|reject` are not wired yet; the
+  UI shows "Not available yet" instead of failing.
 
 ## Safety rules the UI enforces
 

@@ -1,4 +1,5 @@
 import type { Finding, FindingKind, IncidentDetail, Investigation } from "../api/types";
+import { ApiError } from "../api/client";
 import { useInvestigate } from "../api/queries";
 import { fmtUtc, shortId } from "../lib/format";
 import { GBadge, Note, Spinner, type Tone } from "./ui";
@@ -62,11 +63,14 @@ export function InvestigationSection({ incident, loadedEventIds, onFocusEvent }:
         </button>
       </header>
       {body}
-      {investigate.isError && (
-        <Note type="error" label="Request failed">
-          {investigate.error.message}
-        </Note>
-      )}
+      {investigate.isError &&
+        (investigate.error instanceof ApiError && investigate.error.kind === "not_found" && !incident.investigation ? (
+          <Note label="Not available yet">This API does not expose on-demand investigation. Detection and alerts are unaffected.</Note>
+        ) : (
+          <Note type="error" label="Request failed">
+            {investigate.error.message}
+          </Note>
+        ))}
     </section>
   );
 }

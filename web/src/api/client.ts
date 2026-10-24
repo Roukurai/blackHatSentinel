@@ -2,7 +2,8 @@ import type { Health, Incident, IncidentDetail, ResponseAction } from "./types";
 
 // Same-origin requests. Basic-auth credentials are handled by the browser's
 // native prompt and attached automatically; nothing is stored in this code.
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "/api";
+// The API serves JSON at the root; set VITE_API_BASE only if it moves under a prefix.
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 export const FIXTURE_MODE = import.meta.env.DEV && import.meta.env.VITE_FIXTURES === "1";
 
