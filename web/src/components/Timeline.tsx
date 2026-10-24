@@ -11,53 +11,63 @@ interface Props {
   highlighted: string | null;
 }
 
+const FAILURE_TYPES = new Set(["ssh_invalid_user", "ssh_preauth_disconnect", "ssh_failed_password"]);
+
 export function Timeline({ events, citedBy, highlighted }: Props) {
   const sorted = [...events].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   return (
-    <ol className="timeline">
-      {sorted.map((e) => (
-        <EventRow key={e.event_id} ev={e} cited={citedBy.get(e.event_id) ?? 0} highlighted={highlighted === e.event_id} />
-      ))}
-    </ol>
+    <div className="logs">
+      <div className="logs__bar">
+        <span>Time (UTC)</span>
+        <span>Event</span>
+        <span>Username · Source</span>
+      </div>
+      <ol className="logs__list">
+        {sorted.map((e) => (
+          <EventRow key={e.event_id} ev={e} cited={citedBy.get(e.event_id) ?? 0} highlighted={highlighted === e.event_id} />
+        ))}
+      </ol>
+    </div>
   );
 }
 
 function EventRow({ ev, cited, highlighted }: { ev: SentinelEvent; cited: number; highlighted: boolean }) {
   const [rawOpen, setRawOpen] = useState(false);
-  const success = ev.type === "ssh_success";
+  const kind = ev.type === "ssh_success" ? "success" : FAILURE_TYPES.has(ev.type) ? "failure" : "other";
 
   return (
-    <li id={`ev-${ev.event_id}`} className={`event${success ? " event--success" : ""}${highlighted ? " event--highlight" : ""}`}>
-      <div className="event__main">
-        <time className="mono event__time" dateTime={ev.timestamp} title={ev.timestamp}>
+    <li id={`ev-${ev.event_id}`} className={`log log--${kind}${highlighted ? " log--highlight" : ""}`}>
+      <div className="log__main">
+        <time className="log__time" dateTime={ev.timestamp} title={fmtUtc(ev.timestamp)}>
           {fmtUtcMs(ev.timestamp)}
         </time>
-        <span className="event__type">{eventLabel(ev.type)}</span>
-        <span className="event__user">
+        <span className="log__type">{eventLabel(ev.type)}</span>
+        <span className="log__msg">
           <Username value={ev.username} />
-        </span>
-        <span className="mono event__src">
-          {ev.source_ip ?? "local"}
-          {ev.source_port !== null && <span className="faint">:{ev.source_port}</span>}
-        </span>
-        <OriginBadge origin={ev.origin} />
-        <span className="row__spacer" />
-        {cited > 0 && (
-          <span className="event__cited" title="Cited as evidence by AI findings">
-            cited ×{cited}
+          <span className="log__src">
+            {ev.source_ip ?? "local"}
+            {ev.source_port !== null && <span className="log__port">:{ev.source_port}</span>}
           </span>
-        )}
-        <span className="mono faint event__id" title={ev.event_id}>
-          {shortId(ev.event_id)}
+          <OriginBadge origin={ev.origin} />
         </span>
-        <button type="button" className="link-btn" aria-expanded={rawOpen} onClick={() => setRawOpen(!rawOpen)}>
-          {rawOpen ? "hide raw" : "raw"}
-        </button>
+        <span className="log__meta">
+          {cited > 0 && (
+            <span className="log__cited" title="Cited as evidence by AI findings">
+              cited ×{cited}
+            </span>
+          )}
+          <span className="log__id" title={ev.event_id}>
+            {shortId(ev.event_id)}
+          </span>
+          <button type="button" className="log__raw-btn" aria-expanded={rawOpen} onClick={() => setRawOpen(!rawOpen)}>
+            {rawOpen ? "hide" : "raw"}
+          </button>
+        </span>
       </div>
       {rawOpen && (
-        <div className="event__raw">
-          <div className="event__raw-label">Raw journal message · untrusted · {fmtUtc(ev.timestamp)}</div>
-          <pre className="mono">{visible(ev.raw_message)}</pre>
+        <div className="log__raw">
+          <div className="log__raw-label">Raw journal message · untrusted</div>
+          <pre>{visible(ev.raw_message)}</pre>
         </div>
       )}
     </li>

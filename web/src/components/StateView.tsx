@@ -1,45 +1,34 @@
-import type { ReactNode } from "react";
 import { ApiError } from "../api/client";
-
-type Tone = "neutral" | "bad" | "warn";
-
-export function StateView({ title, children, tone = "neutral" }: { title: string; children?: ReactNode; tone?: Tone }) {
-  return (
-    <div className={`state state--${tone}`} role={tone === "bad" ? "alert" : "status"}>
-      <div className="state__title">{title}</div>
-      {children && <div className="state__body">{children}</div>}
-    </div>
-  );
-}
+import { EmptyState, Note, Skeleton } from "./ui";
 
 export function ErrorState({ error, what }: { error: unknown; what: string }) {
   if (error instanceof ApiError) {
     if (error.kind === "auth")
       return (
-        <StateView tone="warn" title="Authentication required">
+        <Note type="warning" label="Authentication required">
           Reload the page to sign in.
-        </StateView>
+        </Note>
       );
-    if (error.kind === "not_found") return <StateView title={`${what} not found`} />;
+    if (error.kind === "not_found") return <EmptyState title={`${what} not found`}>It may have been removed, or the link is wrong.</EmptyState>;
     if (error.kind === "network")
       return (
-        <StateView tone="bad" title="API unreachable">
+        <Note type="error" label="API unreachable">
           Retrying automatically.
-        </StateView>
+        </Note>
       );
   }
   return (
-    <StateView tone="bad" title={`Could not load ${what.toLowerCase()}`}>
+    <Note type="error" label={`Could not load ${what.toLowerCase()}`}>
       {error instanceof Error ? error.message : "Unknown error"}. Retrying automatically.
-    </StateView>
+    </Note>
   );
 }
 
-export function SkeletonRows({ count = 5 }: { count?: number }) {
+export function SkeletonRows({ count = 5, height = 64 }: { count?: number; height?: number }) {
   return (
-    <div aria-busy="true" aria-label="Loading">
+    <div className="skeleton-rows" aria-busy="true" aria-label="Loading">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="skeleton-row" />
+        <Skeleton key={i} height={height} />
       ))}
     </div>
   );

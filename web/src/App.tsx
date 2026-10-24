@@ -1,55 +1,82 @@
-import { Link, Route, Routes, useParams } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { useHealth, useIncidents } from "./api/queries";
 import { FixtureBanner } from "./components/FixtureBanner";
-import { HealthStrip } from "./components/HealthStrip";
-import { IncidentDetail } from "./components/IncidentDetail";
-import { IncidentList } from "./components/IncidentList";
-import { StateView } from "./components/StateView";
+import { HealthIndicator, HealthPage } from "./components/Health";
+import { IncidentPage } from "./components/IncidentDetail";
+import { IncidentsPage } from "./components/IncidentList";
+import { EmptyState } from "./components/ui";
 
 export function App() {
   return (
     <div className="shell">
       <FixtureBanner />
-      <header className="topbar">
-        <Link to="/" className="brand">
-          SENTINEL
-        </Link>
-        <HostName />
-        <HealthStrip />
-      </header>
-      <Routes>
-        <Route path="/" element={<Workspace />} />
-        <Route path="/incidents/:id" element={<Workspace />} />
-        <Route path="*" element={<StateView title="Page not found" />} />
-      </Routes>
+      <Header />
+      <main className="main">
+        <Routes>
+          <Route path="/" element={<IncidentsPage />} />
+          <Route path="/incidents/:id" element={<IncidentRoute />} />
+          <Route path="/health" element={<HealthPage />} />
+          <Route
+            path="*"
+            element={
+              <div className="page">
+                <EmptyState title="Page not found" />
+              </div>
+            }
+          />
+        </Routes>
+      </main>
     </div>
   );
 }
 
-function HostName() {
+function IncidentRoute() {
+  const { id } = useParams();
+  return <IncidentPage key={id} id={id!} />;
+}
+
+function Logo() {
+  // Sentinel mark: a monochrome shield. Not the Vercel logo.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2 3.5 5.5v6c0 5 3.6 9.3 8.5 10.5 4.9-1.2 8.5-5.5 8.5-10.5v-6L12 2Z" fill="currentColor" />
+      <path d="M8 12.5h8" stroke="var(--ds-background-200)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Header() {
   const health = useHealth();
   const incidents = useIncidents();
   const host = health.data?.host_id ?? incidents.data?.[0]?.host_id;
-  return <span className="host mono">{host ?? "—"}</span>;
-}
+  const { pathname } = useLocation();
+  const onIncidents = pathname === "/" || pathname.startsWith("/incidents");
 
-function Workspace() {
-  const { id } = useParams();
   return (
-    <main className={`workspace${id ? " workspace--has-detail" : ""}`}>
-      <IncidentList selectedId={id} />
-      <section className="workspace__detail" aria-label="Incident detail">
-        {id ? (
-          <>
-            <Link to="/" className="back-link">
-              ← All incidents
-            </Link>
-            <IncidentDetail key={id} id={id} />
-          </>
-        ) : (
-          <StateView title="Select an incident">Choose an incident to see its timeline, evidence and investigation.</StateView>
-        )}
-      </section>
-    </main>
+    <header className="header">
+      <div className="header__top">
+        <NavLink to="/" className="brand" aria-label="Sentinel home">
+          <Logo />
+          <span>Sentinel</span>
+        </NavLink>
+        <span className="slash" aria-hidden="true">
+          /
+        </span>
+        <span className="scope">
+          <span className="scope__avatar" aria-hidden="true" />
+          <span className="mono">{host ?? "—"}</span>
+        </span>
+        <span className="spacer" />
+        <HealthIndicator />
+      </div>
+      <nav className="tabs" aria-label="Sections">
+        <NavLink to="/" className={() => `tab${onIncidents ? " tab--active" : ""}`}>
+          Incidents
+        </NavLink>
+        <NavLink to="/health" className={({ isActive }) => `tab${isActive ? " tab--active" : ""}`}>
+          Health
+        </NavLink>
+      </nav>
+    </header>
   );
 }

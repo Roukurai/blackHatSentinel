@@ -13,7 +13,7 @@ export function UntrustedText({ value, max = 48 }: { value: string; max?: number
     <span className={`untrusted${flagged ? " untrusted--flagged" : ""}`} title={flagged ? "Contains hidden or control characters" : undefined}>
       “{open || !long ? shown : shown.slice(0, max) + "…"}”
       {long && (
-        <button type="button" className="link-btn" onClick={() => setOpen(!open)}>
+        <button type="button" className="link-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? "less" : `+${shown.length - max}`}
         </button>
       )}
