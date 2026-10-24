@@ -245,6 +245,26 @@ test("a telegram outage keeps the incident and retries", async () => {
   db.close();
 });
 
+test("each configured chat receives its own copy of the alert", async () => {
+  const db = openDatabase(":memory:");
+  const sent: string[] = [];
+  const cfg = config({ telegramChatId: "111, 222" });
+  const events = [1, 2, 3, 4, 5].map((port) => event(`people-${port}`, {
+    timestamp: `2026-10-24T21:00:0${port}.000Z`,
+    type: "ssh_invalid_user",
+    source_ip: "203.0.113.90",
+    source_port: 61000 + port,
+  }));
+  ingest(db, events, cfg);
+  await flushNotifications(db, cfg, async (text) => {
+    sent.push(text);
+  });
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0], sent[1]);
+  assert.equal(listIncidentRecords(db)[0].notificationStatus, "sent");
+  db.close();
+});
+
 test("overlapping flushes send one alert", async () => {
   const db = openDatabase(":memory:");
   const cfg = config();
