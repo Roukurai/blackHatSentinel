@@ -29,10 +29,9 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const response = await handleMcpJsonRpc(msg, callTool);
-    if (response) {
-      process.stdout.write(`${JSON.stringify(response)}\n`);
-    }
+    const outcome = await handleMcpJsonRpc(msg, callTool);
+    if (outcome.kind === "notification") continue;
+    process.stdout.write(`${JSON.stringify(outcome.response)}\n`);
   }
 
   db.close();

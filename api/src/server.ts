@@ -37,7 +37,12 @@ import type { Config, Incident, SentinelEvent } from "./types.ts";
 import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
 import { serveWeb } from "./web.ts";
-import { handleMcpHttp, sendMcpHttpResult } from "./mcp/http.ts";
+import {
+  handleMcpGet,
+  handleMcpHttp,
+  handleMcpOptions,
+  sendMcpHttpResult,
+} from "./mcp/http.ts";
 import { ensureMcpTokensTable } from "./mcp/tokens.ts";
 
 export interface ServerOptions {
@@ -192,8 +197,16 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     return;
   }
 
-  // Remote MCP: Bearer token only (not dashboard Basic auth). Before the dashboard gate.
+  // Remote MCP (Streamable HTTP): MCP token auth, not dashboard Basic/session. Before the dashboard gate.
   if (path === "/mcp") {
+    if (req.method === "OPTIONS") {
+      sendMcpHttpResult(res, handleMcpOptions());
+      return;
+    }
+    if (req.method === "GET") {
+      sendMcpHttpResult(res, handleMcpGet());
+      return;
+    }
     if (req.method !== "POST") throw new HttpError(405, "method not allowed");
     const text = await readBody(req);
     const result = await handleMcpHttp(req, text, db, config);

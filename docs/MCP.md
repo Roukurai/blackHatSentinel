@@ -9,7 +9,7 @@ Two transports:
 | Transport | When | Auth |
 |---|---|---|
 | **stdio** | Agent runs on the same host (`sentinell mcp`) | Process trust boundary |
-| **HTTP** `POST /mcp` | Cloud agents (e.g. Grok Bot) hit the VPS | Bearer token (`sntl_mcp_…`) |
+| **HTTP** `POST /mcp` (Streamable HTTP) | Cloud agents (e.g. Grok Bot) hit the VPS | `Authorization: Bearer sntl_mcp_…` **or** bare `Authorization: sntl_mcp_…` |
 
 Tracked: [JOR-298](https://linear.app/jordidimass/issue/JOR-298/read-only-mcp-installsh-for-sentinellxyz) (stdio), [JOR-303](https://linear.app/jordidimass/issue/JOR-303/remote-mcp-bearer-token-generate-post-mcp) (remote Bearer).
 
@@ -58,7 +58,9 @@ sentinell mcp token create --name grok
 
 Only a SHA-256 hash is stored. Never put the token in Telegram alerts or paste it into shared chat logs.
 
-With **no active tokens**, `POST /mcp` returns `503` (remote disabled). Invalid/revoked/missing Bearer → `401`. Dashboard Basic auth does **not** unlock `/mcp`.
+With **no active tokens**, `POST /mcp` returns `503` (remote disabled). Invalid/revoked/missing token → `401`. Dashboard Basic auth does **not** unlock `/mcp`.
+
+Streamable HTTP notes: `initialize` returns `Mcp-Session-Id` (echo on later requests); `notifications/initialized` → `202`; `GET /mcp` → `405` (no long-lived SSE); CORS allows `Authorization`. Prefer TLS so proxies do not strip the header.
 
 ### 2. Register URL + header
 
@@ -75,7 +77,20 @@ With **no active tokens**, `POST /mcp` returns `503` (remote disabled). Invalid/
 }
 ```
 
-One JSON-RPC request per `POST` (no SSE). Same tools as stdio.
+Smoke:
+
+```bash
+# initialize
+curl -sS -D- -X POST http://127.0.0.1:8080/mcp \
+  -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+# tools/list + list_alerts for today
+curl -sS -X POST http://127.0.0.1:8080/mcp \
+  -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
+  -H "mcp-session-id: <from initialize>" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_alerts","arguments":{"date":"2026-10-24"}}}'
+# Inspector: npx @modelcontextprotocol/inspector http://<host>:8080/mcp
+```
 
 ## Agent setup prompt (landing copy)
 
@@ -127,8 +142,10 @@ If the dashboard has no password yet, `authenticate` returns `setup_required`. C
 
 | Tool | Purpose |
 |---|---|
-| `list_incidents` | Newest incidents |
-| `get_incident` | One incident (+ sanitized event summary; may include `root_cause` / `remediation` guidance) |
+| `list_incidents` | Newest incidents; optional `since` / `until` / `status` |
+| `get_incident` | Incident + timeline + `evidence_event_ids` (and investigation when present) |
+| `list_alerts` | Telegram notification history (`pending`/`sent`/`failed`); filter by `date` / `since` / `until` / `status` |
+| `get_investigation` | Findings labeled observed/suspected/unknown for one incident |
 | `get_incident_events` | Sanitized events for an incident |
 | `get_auth_history` | History by `source_ip` **or** `username`, window `1h\|24h\|7d` |
 | `get_host_metadata` | Static host facts |

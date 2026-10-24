@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS mcp_tokens (
 CREATE INDEX IF NOT EXISTS idx_mcp_tokens_hash ON mcp_tokens (sha256_hash);
 `;
 
-const TOKEN_PREFIX = "sntl_mcp_";
+export const TOKEN_PREFIX = "sntl_mcp_";
 
 export interface McpTokenMeta {
   id: string;
@@ -124,20 +124,19 @@ export function revokeMcpToken(db: DatabaseSync, id: string): boolean {
 }
 
 /**
- * Verify Bearer token. Updates last_used_at on success.
- * Uses timing-safe compare against stored hash.
+ * Verify MCP token. Updates last_used_at on success.
+ * Uses timing-safe compare against stored hash. Never log the token.
  */
-export function verifyMcpToken(db: DatabaseSync, bearer: string, now = new Date()): boolean {
+export function verifyMcpToken(db: DatabaseSync, token: string, now = new Date()): boolean {
   ensureMcpTokensTable(db);
-  if (!bearer.startsWith(TOKEN_PREFIX)) return false;
+  if (!token.startsWith(TOKEN_PREFIX)) return false;
 
-  const hashHex = hashMcpToken(bearer);
+  const hashHex = hashMcpToken(token);
   const row = db
     .prepare(`SELECT id, sha256_hash, revoked_at, expires_at FROM mcp_tokens WHERE sha256_hash = ?`)
     .get(hashHex) as Row | undefined;
 
   if (!row) {
-    // Dummy compare to reduce timing leak on miss
     const dummy = Buffer.from(hashHex, "hex");
     timingSafeEqual(dummy, dummy);
     return false;
@@ -160,9 +159,29 @@ export function verifyMcpToken(db: DatabaseSync, bearer: string, now = new Date(
   return true;
 }
 
-/** Extract Bearer token from Authorization header value. */
-export function extractBearerToken(authorization: string | undefined): string | null {
+/**
+ * Extract MCP token from Authorization header.
+ * Accepts `Bearer <token>` and bare `<token>` (e.g. `Authorization: sntl_mcp_…`).
+ * Never logs the value.
+ */
+export function extractMcpToken(authorization: string | undefined): string | null {
   if (!authorization) return null;
-  const m = /^Bearer\s+(\S+)$/i.exec(authorization.trim());
-  return m ? m[1] : null;
+  const v = authorization.trim();
+  if (!v) return null;
+
+  const bearer = /^Bearer\s+(\S+)/i.exec(v);
+  if (bearer) return bearer[1];
+
+  // Reject other auth schemes
+  if (/^(Basic|Digest|Negotiate|Token)\s/i.test(v)) return null;
+
+  // Bare token: first whitespace-separated field
+  const bare = v.split(/\s+/)[0] ?? "";
+  if (bare.startsWith(TOKEN_PREFIX)) return bare;
+  return null;
+}
+
+/** @deprecated use extractMcpToken */
+export function extractBearerToken(authorization: string | undefined): string | null {
+  return extractMcpToken(authorization);
 }
