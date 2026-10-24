@@ -1,4 +1,4 @@
-# Sentinel
+# Sentinell.xyz
 
 **The autonomous L1 security analyst for a single Linux server.**
 
