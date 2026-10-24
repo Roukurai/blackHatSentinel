@@ -13,11 +13,11 @@ export interface Detection {
   lastSeen: string;
 }
 
-// Same IP, port, and username is one attempt (invalid-user + preauth). A different
-// username on that port counts again so the same-port replay series still correlates.
+// One failed attempt is a distinct (source_ip, source_port). A missing port does not
+// collapse unrelated lines onto the same attempt.
 export function attemptKey(event: SentinelEvent): string {
   const port = event.source_port === null ? `event:${event.event_id}` : String(event.source_port);
-  return `${event.source_ip ?? ""}\n${port}\n${event.username ?? ""}`;
+  return `${event.source_ip ?? ""}\n${port}`;
 }
 
 function ms(timestamp: string): number {

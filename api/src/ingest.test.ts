@@ -96,7 +96,6 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
   const incidents = listIncidentRecords(db).map(toIncident).reverse();
   assert.deepEqual(incidents.map((incident) => incident.source_ip), [
     "192.0.2.50",
-    "203.0.113.9",
     "203.0.113.77",
     "203.0.113.200",
   ]);
@@ -108,21 +107,16 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
   assert.ok(burst.usernames.includes(""));
   assert.equal(burst.notification.status, "sent");
 
-  const slow = incidents[1];
-  assert.equal(slow.severity, "low");
-  assert.deepEqual(slow.patterns, ["low_and_slow"]);
-  assert.equal(slow.failed_attempts, 10);
-
-  const demo = incidents[2];
+  const demo = incidents[1];
   assert.equal(demo.severity, "high");
   assert.ok(demo.patterns.includes("success_after_failures"));
   assert.equal(demo.notification.attempts, 1);
 
-  const benign = incidents[3];
+  const benign = incidents[2];
   assert.equal(benign.severity, "low");
   assert.deepEqual(benign.patterns, ["new_source_success"]);
 
-  assert.equal(sent.length, 4);
+  assert.equal(sent.length, 3);
   for (const text of sent) {
     assert.equal(text.includes("RAW_SHOULD_NOT_LEAK"), false);
     assert.equal(text.includes("solana"), false);
@@ -131,10 +125,10 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
     assert.match(text, /^Sentinel \/ suspicious SSH activity\nHost: ubuntu-01\nSource: /);
     assert.match(text, /Status: investigation pending/);
   }
-  assert.match(sent[2], /Severity: high/);
-  assert.match(sent[2], /success after failures/);
-  assert.match(sent[3], /Severity: low/);
-  assert.match(sent[3], /success from a new source/);
+  assert.match(sent[1], /Severity: high/);
+  assert.match(sent[1], /success after failures/);
+  assert.match(sent[2], /Severity: low/);
+  assert.match(sent[2], /success from a new source/);
   db.close();
 });
 
@@ -273,5 +267,39 @@ test("overlapping flushes send one alert", async () => {
   release();
   await Promise.all([first, second]);
   assert.equal(started, 1);
+  db.close();
+});
+
+test("ten distinct ports inside the slow window are low-and-slow", () => {
+  const db = openDatabase(":memory:");
+  const base = Date.parse("2026-10-24T16:00:00.000Z");
+  const events = Array.from({ length: 10 }, (_, index) => event(`slow-${index}`, {
+    timestamp: new Date(base + index * 120_000).toISOString(),
+    type: "ssh_invalid_user",
+    source_ip: "203.0.113.9",
+    source_port: 30000 + index,
+    username: `user-${index}`,
+  }));
+  ingest(db, events, config());
+  const incident = listIncidentRecords(db)[0];
+  assert.equal(incident.severity, "low");
+  assert.deepEqual(incident.patterns, ["low_and_slow"]);
+  assert.equal(incident.failedAttempts, 10);
+  db.close();
+});
+
+test("local events outside the slow window open a separate incident", () => {
+  const db = openDatabase(":memory:");
+  const cfg = config();
+  const batch = (seed: string, start: string) => [0, 1, 2, 3, 4].map((index) => event(`${seed}-${index}`, {
+    timestamp: new Date(Date.parse(start) + index * 1000).toISOString(),
+    type: "ssh_invalid_user",
+    source_ip: null,
+    source_port: null,
+    username: "root",
+  }));
+  ingest(db, batch("early", "2026-10-24T10:00:00.000Z"), cfg);
+  ingest(db, batch("later", "2026-10-24T12:00:00.000Z"), cfg);
+  assert.equal(listIncidentRecords(db).length, 2);
   db.close();
 });

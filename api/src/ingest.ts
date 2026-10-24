@@ -32,6 +32,19 @@ function keyId(key: SourceKey): string {
   return `${key.hostId}\n${key.sourceIp ?? ""}\n${key.usernameKey ?? ""}`;
 }
 
+function scopeEvents(key: SourceKey, events: SentinelEvent[], config: Config): SentinelEvent[] {
+  if (key.sourceIp !== null || events.length === 0) return events;
+  const latest = Date.parse(events[events.length - 1].timestamp);
+  const start = latest - config.detect.slowWindowMs;
+  return events.filter((event) => Date.parse(event.timestamp) >= start);
+}
+
+function sameOpenWindow(key: SourceKey, open: IncidentRecord, scoped: SentinelEvent[], config: Config): boolean {
+  if (key.sourceIp !== null || scoped.length === 0) return true;
+  const latest = Date.parse(scoped[scoped.length - 1].timestamp);
+  return latest - Date.parse(open.lastSeen) <= config.detect.slowWindowMs;
+}
+
 function scheduleEscalation(current: IncidentRecord, config: Config): void {
   if (current.escalationSent || current.pendingKind !== null) return;
   if (current.notificationLastSentAt === null) return;
@@ -62,9 +75,12 @@ export function ingest(db: DatabaseSync, body: unknown, config: Config): IngestR
     }
 
     for (const key of keys) {
-      const detection = evaluate(eventsForKey(db, key), config.detect);
+      const stored = eventsForKey(db, key);
+      const scoped = scopeEvents(key, stored, config);
+      const detection = evaluate(scoped, config.detect);
       if (!detection) continue;
-      const open = openIncidentForKey(db, key);
+      let open = openIncidentForKey(db, key);
+      if (open && !sameOpenWindow(key, open, scoped, config)) open = null;
       if (!open) {
         const seq = nextIncidentSeq(db);
         insertIncident(db, {

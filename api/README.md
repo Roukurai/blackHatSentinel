@@ -1,6 +1,6 @@
 # api (Node.js + TypeScript) — owners: Kevin (API, correlation, notifier), Hugo (investigator module)
 
-Ingests `POST /events`, correlates SSH activity into incidents, and sends one Telegram alert per new incident (at most one extra alert on escalation). SQLite at `DB_PATH`. `getIncidentEvents` and `getAuthHistory` in `src/evidence.ts` are the read-only evidence lookups. Telegram notification never waits for the investigator.
+Ingests `POST /events`, correlates SSH activity into incidents, and sends one Telegram alert per new incident (at most one extra alert on escalation). SQLite at `DB_PATH`. `getIncidentEvents` and `getAuthHistory` in `src/evidence.ts` are the read-only evidence lookups. Investigation and response actions are not in this slice. Telegram notification never waits for the investigator.
 
 ## Run
 

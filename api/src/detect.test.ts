@@ -35,12 +35,16 @@ test("same connection is one failed attempt", () => {
   assert.equal(evaluate(events, detect), null);
 });
 
-test("a new username on the same port counts as another attempt", () => {
+test("the same port is one attempt even when the username changes", () => {
   const events = [0, 1, 2, 3, 4].map((index) => ev(index, {
     source_port: 30000,
     username: `user-${index}`,
   }));
-  const found = evaluate(events, detect);
+  assert.equal(evaluate(events, detect), null);
+});
+
+test("five distinct ports in the fast window are a burst", () => {
+  const found = evaluate([0, 1, 2, 3, 4].map((index) => ev(index)), detect);
   assert.equal(found?.failedAttempts, 5);
   assert.deepEqual(found?.patterns, ["burst"]);
   assert.equal(found?.severity, "medium");

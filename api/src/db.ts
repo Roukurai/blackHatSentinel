@@ -139,6 +139,27 @@ export function eventsForKey(db: DatabaseSync, key: SourceKey): SentinelEvent[] 
   return rows.map(mapEvent);
 }
 
+export function matchingEvents(
+  db: DatabaseSync,
+  filter: { sourceIp?: string; username?: string },
+): SentinelEvent[] {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (filter.sourceIp !== undefined) {
+    clauses.push("source_ip = ?");
+    params.push(filter.sourceIp);
+  }
+  if (filter.username !== undefined) {
+    clauses.push("ifnull(username, '') = ?");
+    params.push(filter.username);
+  }
+  if (clauses.length === 0) return [];
+  const rows = db.prepare(
+    `SELECT * FROM events WHERE ${clauses.join(" AND ")} ORDER BY event_ts, event_id`,
+  ).all(...params) as Row[];
+  return rows.map(mapEvent);
+}
+
 export function eventsByIds(db: DatabaseSync, ids: string[]): SentinelEvent[] {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(", ");
