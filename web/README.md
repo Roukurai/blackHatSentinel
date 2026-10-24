@@ -25,7 +25,16 @@ npm run dev            # proxies the API to VITE_API_TARGET (see .env.example)
 npm run build          # type-check + production build into web/dist
 ```
 
-Routes: `/` incidents · `/incidents/:id` incident (Telegram deep link) · `/health`.
+Routes: `/` incidents · `/incidents/:id` incident (Telegram deep link) · `/health` · `/setup` ·
+`/settings/ai` (BYOK) · `/settings/notifications` · `/settings/response` · `/settings/host`.
+
+Admin layout: a sidebar (Monitor / Configure) with live status dots. `⌘B` / `Ctrl+B` collapses it to an
+icon rail (remembered per browser); on small screens it toggles the drawer.
+
+Setup (`/setup`) is a step list driven only by what the host reports (`GET /settings/overview`,
+`/health`, `/settings/llm`): protect the dashboard, connect your AI provider (bring your own key, stored
+on the host, only the last 4 characters are ever shown), Telegram, collector, optional response runner,
+first incident. Each step ticks itself off; nothing is marked done in the browser.
 
 `⌘K` / `Ctrl+K` opens the command menu: jump to a page or search incidents by IP, ID, severity,
 status or pattern. It only navigates; approving a block always goes through the incident's dialog.
