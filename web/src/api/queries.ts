@@ -15,6 +15,7 @@ export const keys = {
   incident: (id: string) => ["incident", id] as const,
   llmSettings: ["llmSettings"] as const,
   overview: ["settingsOverview"] as const,
+  notifications: ["notifications"] as const,
 };
 
 export function useAuthStatus() {
@@ -103,6 +104,30 @@ export function useSaveLlmSettings() {
 }
 
 // Configuration changes on the host (env, collector) are slow; poll gently.
+export function useMyNotifications() {
+  return useQuery({
+    queryKey: keys.notifications,
+    queryFn: ({ signal }) => api.notifications(signal),
+    refetchInterval: (q) => pollUnlessFatal(q.state.error) && 5000,
+  });
+}
+
+export function useCreatePerson() {
+  return useMutation({
+    mutationKey: ["createPerson"],
+    mutationFn: (input: { username: string; password: string }) => api.createPerson(input.username, input.password),
+  });
+}
+
+export function useLinkTelegram() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ["linkTelegram"],
+    mutationFn: () => api.linkTelegram(),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
 export function useSettingsOverview() {
   return useQuery({
     queryKey: keys.overview,

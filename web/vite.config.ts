@@ -29,6 +29,8 @@ export default defineConfig(({ mode }) => {
         "/logout": toApi,
         "/setup": toApi,
         "/auth": toApi,
+        "/notifications": toApi,
+        "/users": toApi,
       };
 
   return {

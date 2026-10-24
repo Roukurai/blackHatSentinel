@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError } from "../api/client";
-import { useHealth, useLlmSettings, useSaveLlmSettings, useSettingsOverview } from "../api/queries";
+import { useCreatePerson, useHealth, useLinkTelegram, useLlmSettings, useMyNotifications, useSaveLlmSettings, useSettingsOverview } from "../api/queries";
 import type { LlmProviderId, LlmProviderSlot } from "../api/types";
 import { fmtDuration, fmtUtc, relAge, useNow } from "../lib/format";
 import { EmptyState, GBadge, Note, Spinner, StatusDot } from "./ui";
@@ -265,6 +265,80 @@ function useOverviewPage() {
   return q;
 }
 
+function PersonalAlerts() {
+  const mine = useMyNotifications();
+  const link = useLinkTelegram();
+  const create = useCreatePerson();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setMessage(null);
+    try {
+      const created = await create.mutateAsync({ username: username.trim(), password });
+      setUsername("");
+      setPassword("");
+      setMessage(`${created.username} can sign in. Their alerts stay on their account.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not add that person.");
+    }
+  };
+
+  return (
+    <div className="card card--pad">
+      <h2 className="h-section">Your alerts</h2>
+      <p className="sub">These stay on the account you signed in with. Another person does not receive them.</p>
+      {mine.isError ? (
+        <Note type="error" label="Could not load">Your alerts could not be loaded.</Note>
+      ) : !mine.data ? (
+        <Spinner />
+      ) : mine.data.length === 0 ? (
+        <p className="muted">No personal alerts yet.</p>
+      ) : (
+        <ul className="stack">
+          {mine.data.map((item) => (
+            <li key={item.id}>{item.body}</li>
+          ))}
+        </ul>
+      )}
+      <div className="row-actions">
+        <button type="button" className="g-btn" disabled={link.isPending} onClick={() => void link.mutate()}>
+          {link.isPending ? "Preparing…" : "Link my Telegram"}
+        </button>
+      </div>
+      {link.data && (
+        <Note label="Send this to the bot">
+          Open the Sentinel bot and send <span className="mono">{link.data.code}</span>. It links only this account, for 15 minutes.
+        </Note>
+      )}
+      <form className="login__form" onSubmit={(e) => void onCreate(e)}>
+        <h2 className="h-section">Add a person</h2>
+        <label className="login__field">
+          <span>Username</span>
+          <span className="g-input">
+            <input name="username" autoComplete="off" required value={username} onChange={(e) => setUsername(e.target.value)} />
+          </span>
+        </label>
+        <label className="login__field">
+          <span>Password</span>
+          <span className="g-input">
+            <input name="password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+          </span>
+        </label>
+        {error && <Note type="error" label="Could not add">{error}</Note>}
+        {message && <Note label="Added">{message}</Note>}
+        <button type="submit" className="g-btn g-btn--primary" disabled={create.isPending}>
+          {create.isPending ? "Adding…" : "Add person"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function NotificationsSettingsPage() {
   const q = useOverviewPage();
   const health = useHealth();
@@ -274,7 +348,8 @@ export function NotificationsSettingsPage() {
   const ok = health.data?.telegram === "ok";
   return (
     <div className="page">
-      <SettingsHeader title="Notifications">One Telegram message per new incident, at most one more on escalation. Alerts never include raw logs, usernames or keys.</SettingsHeader>
+      <SettingsHeader title="Notifications">One host alert per new incident, at most one more on escalation. Alerts never include raw logs, usernames or keys. What you do is sent only to you.</SettingsHeader>
+      <PersonalAlerts />
       <div className="card">
         <dl className="kv-list">
           <Row label="Telegram">

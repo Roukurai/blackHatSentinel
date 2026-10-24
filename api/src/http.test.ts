@@ -11,6 +11,7 @@ import { envSessionSecret } from "./dashboard-auth.ts";
 import { createMcpToken, revokeMcpToken } from "./mcp/tokens.ts";
 import { createServer } from "./server.ts";
 import { issueSessionToken } from "./session.ts";
+import { tryBindTelegram } from "./users.ts";
 import type { Config, SentinelEvent } from "./types.ts";
 
 function config(overrides: Partial<Config> = {}): Config {
@@ -425,4 +426,58 @@ test("first launch requires choosing a password, then that password signs in", a
   await once(server, "close");
   db.close();
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a person only receives notifications addressed to them", async () => {
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config({ dashboardUser: "analyst", dashboardPass: "secret" }),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  const ada = await fetch(`${base}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "analyst", password: "secret" }),
+  });
+  assert.equal(ada.status, 200);
+  const cookieA = (ada.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+  assert.equal(JSON.stringify(await ada.json()).includes("secret"), false);
+
+  const created = await fetch(`${base}/users`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: cookieA },
+    body: JSON.stringify({ username: "bob", password: "bob-password-1" }),
+  });
+  assert.equal(created.status, 201);
+  assert.equal(JSON.stringify(await created.json()).includes("bob-password-1"), false);
+
+  const bob = await fetch(`${base}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "bob", password: "bob-password-1" }),
+  });
+  assert.equal(bob.status, 200);
+  const cookieB = (bob.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+
+  const link = await fetch(`${base}/notifications/link`, { method: "POST", headers: { cookie: cookieA } });
+  assert.equal(link.status, 200);
+  const code = (await link.json() as { code: string }).code;
+  assert.equal(tryBindTelegram(db, code, "555"), true);
+
+  const mine = await fetch(`${base}/notifications`, { headers: { cookie: cookieA, accept: "application/json" } });
+  const other = await fetch(`${base}/notifications`, { headers: { cookie: cookieB, accept: "application/json" } });
+  const mineBody = await mine.json() as { notifications: Array<{ body: string }> };
+  const otherBody = await other.json() as { notifications: Array<{ body: string }> };
+  assert.equal(mineBody.notifications.length, 1);
+  assert.match(mineBody.notifications[0]?.body ?? "", /linked to this account/);
+  assert.deepEqual(otherBody.notifications, []);
+
+  server.close();
+  await once(server, "close");
+  db.close();
 });

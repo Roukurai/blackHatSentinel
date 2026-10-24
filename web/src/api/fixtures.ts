@@ -381,6 +381,12 @@ export const fixtureApi: Api = {
 
   llmSettings: () => delay<LlmSettings>(llmState),
 
+  notifications: () => delay([]),
+
+  createPerson: async (username) => delay({ username }),
+
+  linkTelegram: () => delay({ code: "A1B2C3D4", expires_at: new Date(Date.now() + 15 * 60_000).toISOString() }),
+
   settingsOverview: () =>
     delay<SettingsOverview>({
       host_id: HOST,

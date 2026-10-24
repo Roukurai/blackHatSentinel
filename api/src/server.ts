@@ -18,8 +18,21 @@ import {
 import type { SendText } from "./notify.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
 import { settingsOverview } from "./overview.ts";
-import { AuthExistsError, createStoredAuth, credentialsMatch, identityFor, validateNewAccount, type DashboardIdentity } from "./dashboard-auth.ts";
-import { clearAttempts, clearSessionCookie, hasValidSession, recordFailure, revokeSession, sessionCookie, tooManyAttempts } from "./session.ts";
+import { AuthExistsError, createStoredAuth, hashPassword, identityFor, validateNewAccount, type DashboardIdentity } from "./dashboard-auth.ts";
+import { clearAttempts, clearSessionCookie, hasValidSession, readSession, recordFailure, revokeSession, sessionCookie, tooManyAttempts } from "./session.ts";
+import {
+  addUserNotification,
+  authenticate,
+  createLinkCode,
+  DuplicateUserError,
+  ensureUserTables,
+  findUserById,
+  findUserByUsername,
+  importFileUser,
+  insertUser,
+  listUserNotifications,
+  type DashboardUser,
+} from "./users.ts";
 import type { Config, Incident, SentinelEvent } from "./types.ts";
 import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
@@ -56,10 +69,10 @@ function presentedBasic(req: IncomingMessage): { username: string; password: str
   return { username: decoded.slice(0, split), password: decoded.slice(split + 1) };
 }
 
-function authorized(req: IncomingMessage, identity: DashboardIdentity | null): boolean {
+function authorized(req: IncomingMessage, identity: DashboardIdentity | null, db: DatabaseSync): boolean {
   if (!identity) return false;
   const basic = presentedBasic(req);
-  if (basic && credentialsMatch(identity, basic.username, basic.password)) return true;
+  if (basic && authenticate(db, identity, basic.username, basic.password)) return true;
   return hasValidSession(req.headers.cookie, identity.sessionSecret);
 }
 
@@ -78,13 +91,23 @@ function readJsonObject(text: string): Record<string, unknown> {
   return body as Record<string, unknown>;
 }
 
-function establishSession(res: ServerResponse, identity: DashboardIdentity): void {
-  res.setHeader("set-cookie", sessionCookie(identity.sessionSecret));
+function establishSession(res: ServerResponse, identity: DashboardIdentity, userId: string): void {
+  res.setHeader("set-cookie", sessionCookie(identity.sessionSecret, Date.now(), userId));
   res.setHeader("cache-control", "no-store");
   sendJson(res, 200, { ok: true });
 }
 
-async function handleLogin(req: IncomingMessage, res: ServerResponse, config: Config): Promise<void> {
+function signedInUser(req: IncomingMessage, config: Config, db: DatabaseSync): DashboardUser | null {
+  const identity = identityFor(config);
+  if (!identity) return null;
+  const basic = presentedBasic(req);
+  if (basic) return authenticate(db, identity, basic.username, basic.password);
+  const claims = readSession(req.headers.cookie, identity.sessionSecret);
+  if (!claims?.userId) return findUserByUsername(db, identity.username);
+  return findUserById(db, claims.userId);
+}
+
+async function handleLogin(req: IncomingMessage, res: ServerResponse, config: Config, db: DatabaseSync): Promise<void> {
   const identity = identityFor(config);
   if (!identity) throw new HttpError(401, "setup_required");
   const ip = clientIp(req);
@@ -92,15 +115,16 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse, config: Co
   const body = readJsonObject(await readBody(req));
   const username = typeof body.username === "string" ? body.username : "";
   const password = typeof body.password === "string" ? body.password : "";
-  if (username.length > 256 || password.length > 256 || !credentialsMatch(identity, username, password)) {
+  const user = username.length > 256 || password.length > 256 ? null : authenticate(db, identity, username, password);
+  if (!user) {
     recordFailure(ip);
     throw new HttpError(401, "invalid credentials");
   }
   clearAttempts(ip);
-  establishSession(res, identity);
+  establishSession(res, identity, user.id);
 }
 
-async function handleSetup(req: IncomingMessage, res: ServerResponse, config: Config): Promise<void> {
+async function handleSetup(req: IncomingMessage, res: ServerResponse, config: Config, db: DatabaseSync): Promise<void> {
   if (identityFor(config)) throw new HttpError(409, "already configured");
   if (!config.dashboardAuthPath) throw new HttpError(500, "dashboard auth path is not configured");
   const ip = clientIp(req);
@@ -118,13 +142,14 @@ async function handleSetup(req: IncomingMessage, res: ServerResponse, config: Co
     throw err;
   }
   clearAttempts(ip);
+  const user = insertUser(db, stored.username, stored.passwordHash);
   establishSession(res, {
     username: stored.username,
     sessionSecret: stored.sessionSecret,
     source: "file",
     passwordHash: stored.passwordHash,
     password: null,
-  });
+  }, user.id);
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -182,12 +207,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
   }
 
   if (path === "/login" && req.method === "POST") {
-    await handleLogin(req, res, config);
+    await handleLogin(req, res, config, db);
     return;
   }
 
   if (path === "/setup" && req.method === "POST") {
-    await handleSetup(req, res, config);
+    await handleSetup(req, res, config, db);
     return;
   }
 
@@ -207,7 +232,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
   if (config.webDist && (await serveWeb(req, res, config.webDist, path))) return;
 
   const identity = identityFor(config);
-  if (!authorized(req, identity)) {
+  if (!authorized(req, identity, db)) {
     if (!identity) throw new HttpError(401, "setup_required");
     throw new HttpError(401, "unauthorized");
   }
@@ -225,6 +250,35 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
 
   if (path === "/incidents" && req.method === "GET") {
     sendJson(res, 200, listIncidentRecords(db).map((record) => withResponse(db, toIncident(record), eventsByIds(db, record.eventIds))));
+    return;
+  }
+
+  if (path === "/notifications" && req.method === "GET") {
+    const user = signedInUser(req, config, db);
+    sendJson(res, 200, { notifications: user ? listUserNotifications(db, user.id) : [] });
+    return;
+  }
+
+  if (path === "/notifications/link" && req.method === "POST") {
+    const user = signedInUser(req, config, db);
+    if (!user) throw new HttpError(401, "unauthorized");
+    sendJson(res, 200, createLinkCode(db, user.id));
+    return;
+  }
+
+  if (path === "/users" && req.method === "POST") {
+    const user = signedInUser(req, config, db);
+    if (!user) throw new HttpError(401, "unauthorized");
+    const body = readJsonObject(await readBody(req));
+    const account = validateNewAccount(body.username, body.password);
+    if (typeof account === "string") throw new HttpError(400, account);
+    try {
+      insertUser(db, account.username, hashPassword(account.password));
+    } catch (err) {
+      if (err instanceof DuplicateUserError) throw new HttpError(409, "username is taken");
+      throw err;
+    }
+    sendJson(res, 201, { username: account.username });
     return;
   }
 
@@ -295,6 +349,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     const investigation = await handleInvestigateRoute(investigator, id, async (incidentId, inv) => {
       persistInvestigationResult(db, incidentId, inv);
     });
+    const actor = signedInUser(req, config, db);
+    if (actor) addUserNotification(db, actor.id, "investigation", id, `Your investigation of incident ${id} finished.`);
     sendJson(res, 200, investigation);
     return;
   }
@@ -314,6 +370,15 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     const [, actionId, decision] = actionRoute as unknown as [string, string, "approve" | "reject"];
     if (!config.response) throw new HttpError(503, "response actions are not configured");
     const action = decision === "approve" ? await approveAction(db, actionId, config.response) : rejectAction(db, actionId);
+    const actor = signedInUser(req, config, db);
+    if (actor) {
+      const row = db.prepare("SELECT incident_id FROM actions WHERE id = ?").get(actionId) as { incident_id?: string } | undefined;
+      const incidentId = row?.incident_id ?? actionId;
+      const sentence = decision === "approve"
+        ? `You approved the response for incident ${incidentId}.`
+        : `You rejected the response for incident ${incidentId}.`;
+      addUserNotification(db, actor.id, decision, row?.incident_id ?? null, sentence);
+    }
     sendJson(res, 200, action);
     return;
   }
@@ -334,6 +399,9 @@ function withResponse(db: DatabaseSync, incident: Incident, events: SentinelEven
 export function createServer(options: ServerOptions): Server {
   ensureActionsTable(options.db);
   ensureMcpTokensTable(options.db);
+  ensureUserTables(options.db);
+  const stored = identityFor(options.config);
+  if (stored?.passwordHash) importFileUser(options.db, stored.username, stored.passwordHash);
   const investigator =
     options.investigator ??
     createApiInvestigator(options.db, options.config.llmSettingsPath);

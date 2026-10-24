@@ -10,6 +10,7 @@ import {
   type IncidentRecord,
 } from "./db.ts";
 import type { Config } from "./types.ts";
+import { markPersonalDelivered, pendingPersonal, tryBindTelegram } from "./users.ts";
 
 export type SendText = (text: string) => Promise<void>;
 
@@ -36,13 +37,6 @@ function ensureTelegramTables(db: DatabaseSync): void {
   `);
 }
 
-function rememberChat(db: DatabaseSync, chatId: string): void {
-  db.prepare("INSERT OR IGNORE INTO telegram_recipients (chat_id, added_at) VALUES (?, ?)").run(
-    chatId,
-    new Date().toISOString(),
-  );
-}
-
 function deliveredChats(db: DatabaseSync, incidentId: string, kind: string): Set<string> {
   const rows = db.prepare(
     "SELECT chat_id FROM notification_deliveries WHERE incident_id = ? AND kind = ?",
@@ -56,7 +50,7 @@ function markDelivered(db: DatabaseSync, incidentId: string, kind: string, chatI
   ).run(incidentId, kind, chatId);
 }
 
-async function discoverPrivateChats(db: DatabaseSync, token: string): Promise<void> {
+async function syncLinkedChats(db: DatabaseSync, token: string): Promise<void> {
   const row = db.prepare("SELECT update_offset FROM telegram_offset WHERE id = 1").get() as { update_offset: number } | undefined;
   const offset = row?.update_offset ?? 0;
   const url = new URL(`https://api.telegram.org/bot${token}/getUpdates`);
@@ -66,14 +60,16 @@ async function discoverPrivateChats(db: DatabaseSync, token: string): Promise<vo
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   const payload = await response.json() as {
     ok?: boolean;
-    result?: Array<{ update_id: number; message?: { chat?: { id?: number; type?: string } } }>;
+    result?: Array<{ update_id: number; message?: { text?: string; chat?: { id?: number; type?: string } } }>;
   };
   if (!payload.ok || !payload.result) return;
   let next = offset;
   for (const update of payload.result) {
     next = Math.max(next, update.update_id + 1);
     const chat = update.message?.chat;
-    if (chat?.type === "private" && chat.id !== undefined) rememberChat(db, String(chat.id));
+    if (chat?.type === "private" && chat.id !== undefined) {
+      tryBindTelegram(db, update.message?.text ?? "", String(chat.id));
+    }
   }
   if (next === offset) return;
   db.prepare(`
@@ -82,19 +78,16 @@ async function discoverPrivateChats(db: DatabaseSync, token: string): Promise<vo
   `).run(next);
 }
 
-async function recipientChats(db: DatabaseSync, config: Config, discover: boolean): Promise<string[]> {
-  ensureTelegramTables(db);
-  for (const id of configuredChatIds(config)) rememberChat(db, id);
-  if (discover && config.telegramToken) {
+async function deliverPersonal(db: DatabaseSync, config: Config): Promise<void> {
+  for (const item of pendingPersonal(db)) {
     try {
-      await discoverPrivateChats(db, config.telegramToken);
+      await deliverTelegram(config, item.chatId, item.body);
+      markPersonalDelivered(db, item.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "telegram failed";
-      console.error(`telegram recipient sync failed: ${message}`);
+      console.error(`personal telegram failed for ${item.id}: ${message}`);
     }
   }
-  const rows = db.prepare("SELECT chat_id FROM telegram_recipients ORDER BY added_at, chat_id").all() as Array<{ chat_id: string }>;
-  return rows.map((row) => row.chat_id);
 }
 
 async function deliverTelegram(config: Config, chatId: string, text: string): Promise<void> {
@@ -149,7 +142,16 @@ export async function flushNotifications(
   config: Config,
   send?: SendText,
 ): Promise<string[]> {
-  const chats = await recipientChats(db, config, send === undefined);
+  ensureTelegramTables(db);
+  if (send === undefined && config.telegramToken) {
+    try {
+      await syncLinkedChats(db, config.telegramToken);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "telegram failed";
+      console.error(`telegram link sync failed: ${message}`);
+    }
+  }
+  const chats = configuredChatIds(config);
   const due = listDueIncidents(db, new Date().toISOString());
   const notified: string[] = [];
   for (const incident of due) {
@@ -184,5 +186,6 @@ export async function flushNotifications(
     }
     saveIncident(db, current);
   }
+  if (send === undefined && config.telegramToken) await deliverPersonal(db, config);
   return notified;
 }

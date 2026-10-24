@@ -124,6 +124,14 @@ export interface ResponseAction {
 }
 
 // §6 Health
+export interface UserNotification {
+  id: string;
+  kind: string;
+  incident_id: string | null;
+  body: string;
+  created_at: string;
+}
+
 export interface Health {
   collector_last_event_at: string | null;
   llm: "ok" | "down";

@@ -6,6 +6,7 @@ import type {
   LlmSettingsUpdate,
   ResponseAction,
   SettingsOverview,
+  UserNotification,
 } from "./types";
 
 // Same-origin requests. Sign-in sets an httpOnly session cookie; this code never
@@ -89,6 +90,9 @@ export interface Api {
   llmSettings(signal?: AbortSignal): Promise<LlmSettings>;
   saveLlmSettings(update: LlmSettingsUpdate): Promise<LlmSettings>;
   settingsOverview(signal?: AbortSignal): Promise<SettingsOverview>;
+  notifications(signal?: AbortSignal): Promise<UserNotification[]>;
+  createPerson(username: string, password: string): Promise<{ username: string }>;
+  linkTelegram(): Promise<{ code: string; expires_at: string }>;
 }
 
 const httpApi: Api = {
@@ -101,6 +105,12 @@ const httpApi: Api = {
   llmSettings: (signal) => request("GET", "/settings/llm", signal),
   saveLlmSettings: (update) => request("PUT", "/settings/llm", undefined, update),
   settingsOverview: (signal) => request("GET", "/settings/overview", signal),
+  notifications: async (signal) => {
+    const body = await request<{ notifications: UserNotification[] }>("GET", "/notifications", signal);
+    return body.notifications;
+  },
+  createPerson: (username, password) => request("POST", "/users", undefined, { username, password }),
+  linkTelegram: () => request("POST", "/notifications/link"),
 };
 
 // Fixture module is loaded lazily and only in dev, so it never ships in a build.
@@ -177,4 +187,7 @@ export const api: Api = {
   llmSettings: async (s) => (await getApi()).llmSettings(s),
   saveLlmSettings: async (u) => (await getApi()).saveLlmSettings(u),
   settingsOverview: async (s) => (await getApi()).settingsOverview(s),
+  notifications: async (s) => (await getApi()).notifications(s),
+  createPerson: async (username, password) => (await getApi()).createPerson(username, password),
+  linkTelegram: async () => (await getApi()).linkTelegram(),
 };
