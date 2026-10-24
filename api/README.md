@@ -10,7 +10,9 @@ From the repository root, with Node 22.18+ (Node 24 on the VPS):
 node --experimental-strip-types api/src/index.ts
 ```
 
-The process reads the repo `.env`. Set OpenAI `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` for live investigations. `POST /events` is localhost only. Dashboard routes use HTTP basic auth when `DASHBOARD_USER` / `DASHBOARD_PASS` are set.
+The process reads the repo `.env`. Set OpenAI `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` for live investigations, or use dashboard **Settings** (`GET/PUT /settings/llm`) to bring your own key without restart. `POST /events` is localhost only. Dashboard routes use HTTP basic auth when `DASHBOARD_USER` / `DASHBOARD_PASS` are set.
+
+Read-only MCP: `sentinell mcp` (see [`docs/MCP.md`](../docs/MCP.md)).
 
 ## Dashboard
 

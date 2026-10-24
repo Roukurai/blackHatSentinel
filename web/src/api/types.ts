@@ -131,3 +131,39 @@ export interface Health {
   db: "ok" | string;
   host_id?: string; // ASSUMED (asked Kevin)
 }
+
+export type LlmProviderId = "openai" | "anthropic" | "gemini" | "openrouter" | "custom";
+
+export interface LlmProviderSlot {
+  id: LlmProviderId;
+  label: string;
+  configured: boolean;
+  baseUrl: string;
+  model: string;
+  keyLast4: string | null;
+  keyPlaceholder: string;
+  modelPlaceholder: string;
+  baseUrlPlaceholder: string;
+  hint: string;
+}
+
+/** GET/PUT /settings/llm — never includes the full API key. */
+export interface LlmSettings {
+  configured: boolean;
+  activeProvider: LlmProviderId;
+  baseUrl: string;
+  model: string;
+  keyLast4: string | null;
+  updatedAt: string | null;
+  source: "settings" | "env" | "none";
+  providers: LlmProviderSlot[];
+}
+
+export interface LlmSettingsUpdate {
+  activeProvider?: LlmProviderId;
+  /** Slot to write into (defaults to activeProvider). */
+  provider?: LlmProviderId;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}

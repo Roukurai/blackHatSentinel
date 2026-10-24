@@ -23,6 +23,13 @@ export const MOD_KEY = IS_MAC ? "⌘" : "Ctrl";
 const PAGES: Item[] = [
   { id: "nav-incidents", group: "Go to", label: "Incidents", keywords: "incidents list home", to: "/" },
   { id: "nav-health", group: "Go to", label: "Health", keywords: "health status system collector telegram ai database", to: "/health" },
+  {
+    id: "nav-settings",
+    group: "Go to",
+    label: "Settings",
+    keywords: "settings llm openai api key byo model",
+    to: "/settings",
+  },
 ];
 
 function incidentItem(inc: Incident, now: number): Item {

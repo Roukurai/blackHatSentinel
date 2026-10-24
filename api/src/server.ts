@@ -10,6 +10,12 @@ import {
   healthLlmField,
   persistInvestigationResult,
 } from "./investigate.ts";
+import { isLlmProviderId } from "./llm-providers.ts";
+import {
+  publicLlmSettings,
+  writeStoredLlmSettings,
+  type LlmSettingsPatch,
+} from "./llm-settings.ts";
 import type { SendText } from "./notify.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
 import type { Config, Incident, SentinelEvent } from "./types.ts";
@@ -75,7 +81,8 @@ async function readBody(req: IncomingMessage): Promise<string> {
 
 async function handle(req: IncomingMessage, res: ServerResponse, options: ServerOptions): Promise<void> {
   const { config, db } = options;
-  const investigator = options.investigator ?? createApiInvestigator(db);
+  const investigator =
+    options.investigator ?? createApiInvestigator(db, config.llmSettingsPath);
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
   if (path === "/events") {
@@ -115,6 +122,61 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
   if (path === "/incidents" && req.method === "GET") {
     sendJson(res, 200, listIncidentRecords(db).map((record) => withResponse(db, toIncident(record), eventsByIds(db, record.eventIds))));
     return;
+  }
+
+  if (path === "/settings/llm") {
+    if (req.method === "GET") {
+      sendJson(res, 200, publicLlmSettings(config.llmSettingsPath));
+      return;
+    }
+    if (req.method === "PUT") {
+      const text = await readBody(req);
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        throw new ValidationError("body must be JSON");
+      }
+      if (!body || typeof body !== "object") throw new ValidationError("body must be an object");
+      const o = body as Record<string, unknown>;
+      const patch: LlmSettingsPatch = {};
+      if ("apiKey" in o) {
+        if (typeof o.apiKey !== "string") throw new ValidationError("apiKey must be a string");
+        patch.apiKey = o.apiKey;
+      }
+      if ("baseUrl" in o) {
+        if (typeof o.baseUrl !== "string") throw new ValidationError("baseUrl must be a string");
+        patch.baseUrl = o.baseUrl;
+      }
+      if ("model" in o) {
+        if (typeof o.model !== "string") throw new ValidationError("model must be a string");
+        patch.model = o.model;
+      }
+      if ("activeProvider" in o) {
+        if (!isLlmProviderId(o.activeProvider)) {
+          throw new ValidationError("activeProvider must be openai|anthropic|gemini|openrouter|custom");
+        }
+        patch.activeProvider = o.activeProvider;
+      }
+      if ("provider" in o) {
+        if (!isLlmProviderId(o.provider)) {
+          throw new ValidationError("provider must be openai|anthropic|gemini|openrouter|custom");
+        }
+        patch.provider = o.provider;
+      }
+      if (
+        !("apiKey" in patch) &&
+        !("baseUrl" in patch) &&
+        !("model" in patch) &&
+        !("activeProvider" in patch)
+      ) {
+        throw new ValidationError("provide apiKey, baseUrl, model, and/or activeProvider");
+      }
+      writeStoredLlmSettings(config.llmSettingsPath, patch);
+      sendJson(res, 200, publicLlmSettings(config.llmSettingsPath));
+      return;
+    }
+    throw new HttpError(405, "method not allowed");
   }
 
   if (path.startsWith("/incidents/") && path.endsWith("/investigate") && req.method === "POST") {
@@ -162,7 +224,9 @@ function withResponse(db: DatabaseSync, incident: Incident, events: SentinelEven
 
 export function createServer(options: ServerOptions): Server {
   ensureActionsTable(options.db);
-  const investigator = options.investigator ?? createApiInvestigator(options.db);
+  const investigator =
+    options.investigator ??
+    createApiInvestigator(options.db, options.config.llmSettingsPath);
   const opts: ServerOptions = { ...options, investigator };
   return createHttpServer((req, res) => {
     void handle(req, res, opts).catch((err: unknown) => {

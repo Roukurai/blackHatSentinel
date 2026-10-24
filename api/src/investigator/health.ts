@@ -7,10 +7,10 @@ const PROBE_INTERVAL_MS = 30_000;
 export class HealthTracker {
   private lastOkAt = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private readonly cfg: LlmConfig;
+  private readonly getCfg: () => LlmConfig;
 
-  constructor(cfg: LlmConfig) {
-    this.cfg = cfg;
+  constructor(cfgOrGetter: LlmConfig | (() => LlmConfig)) {
+    this.getCfg = typeof cfgOrGetter === "function" ? cfgOrGetter : () => cfgOrGetter;
   }
 
   markOk(): void {
@@ -18,7 +18,7 @@ export class HealthTracker {
   }
 
   llmHealth(): "ok" | "down" {
-    if (!this.cfg.configured) return "down";
+    if (!this.getCfg().configured) return "down";
     if (Date.now() - this.lastOkAt <= OK_TTL_MS) return "ok";
     return "down";
   }
@@ -26,7 +26,7 @@ export class HealthTracker {
   startHealthProbe(): () => void {
     if (this.timer) return () => this.stop();
     const run = async () => {
-      const ok = await probeModels(this.cfg, 5000);
+      const ok = await probeModels(this.getCfg(), 5000);
       if (ok) this.markOk();
     };
     void run();

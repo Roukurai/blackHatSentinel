@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Thin CLI shim so landing-page MCP prompts work: `sentinell mcp`
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CMD="${1:-}"
+
+usage() {
+  cat <<'EOF'
+sentinell — SSH attack triage helpers
+
+Usage:
+  sentinell mcp       Start read-only MCP server (stdio)
+  sentinell status    Print API /health if reachable
+  sentinell help
+
+Install PATH tip (after ops/install.sh):
+  export PATH="$HOME/.local/bin:$PATH"
+EOF
+}
+
+case "$CMD" in
+  mcp)
+    shift || true
+    exec node --experimental-strip-types "$ROOT/api/src/mcp/server.ts" "$@"
+    ;;
+  status)
+    API_URL="${API_URL:-http://127.0.0.1:8080}"
+    curl -fsS "$API_URL/health" | head -c 2000
+    echo
+    ;;
+  help|-h|--help|"")
+    usage
+    ;;
+  *)
+    echo "unknown command: $CMD" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

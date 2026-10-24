@@ -1,4 +1,11 @@
-import type { Health, Incident, IncidentDetail, ResponseAction } from "./types";
+import type {
+  Health,
+  Incident,
+  IncidentDetail,
+  LlmSettings,
+  LlmSettingsUpdate,
+  ResponseAction,
+} from "./types";
 
 // Same-origin requests. Basic-auth credentials are handled by the browser's
 // native prompt and attached automatically; nothing is stored in this code.
@@ -35,14 +42,23 @@ async function errorReason(res: Response): Promise<string | null> {
   return null;
 }
 
-async function request<T>(method: "GET" | "POST", path: string, signal?: AbortSignal): Promise<T> {
+async function request<T>(
+  method: "GET" | "POST" | "PUT",
+  path: string,
+  signal?: AbortSignal,
+  body?: unknown,
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method,
       signal,
       credentials: "same-origin",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
@@ -65,6 +81,8 @@ export interface Api {
   investigate(id: string): Promise<unknown>;
   approveAction(actionId: string): Promise<ResponseAction | null>;
   rejectAction(actionId: string): Promise<ResponseAction | null>;
+  llmSettings(signal?: AbortSignal): Promise<LlmSettings>;
+  saveLlmSettings(update: LlmSettingsUpdate): Promise<LlmSettings>;
 }
 
 const httpApi: Api = {
@@ -74,6 +92,8 @@ const httpApi: Api = {
   investigate: (id) => request("POST", `/incidents/${encodeURIComponent(id)}/investigate`),
   approveAction: (id) => request("POST", `/actions/${encodeURIComponent(id)}/approve`),
   rejectAction: (id) => request("POST", `/actions/${encodeURIComponent(id)}/reject`),
+  llmSettings: (signal) => request("GET", "/settings/llm", signal),
+  saveLlmSettings: (update) => request("PUT", "/settings/llm", undefined, update),
 };
 
 // Fixture module is loaded lazily and only in dev, so it never ships in a build.
@@ -91,4 +111,6 @@ export const api: Api = {
   investigate: async (id) => (await getApi()).investigate(id),
   approveAction: async (id) => (await getApi()).approveAction(id),
   rejectAction: async (id) => (await getApi()).rejectAction(id),
+  llmSettings: async (s) => (await getApi()).llmSettings(s),
+  saveLlmSettings: async (u) => (await getApi()).saveLlmSettings(u),
 };

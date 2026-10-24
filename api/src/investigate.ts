@@ -11,12 +11,12 @@ import {
   createInvestigator,
   handleInvestigateRoute,
   healthLlmField,
-  loadLlmConfig,
   scheduleInvestigation,
   type Investigation,
   type Investigator,
   type InvestigatorDeps,
 } from "./investigator/index.ts";
+import { llmSettingsPathForDb, resolveLlmConfig } from "./llm-settings.ts";
 
 export function depsFromDatabase(db: DatabaseSync): InvestigatorDeps {
   return {
@@ -41,8 +41,12 @@ export function depsFromDatabase(db: DatabaseSync): InvestigatorDeps {
   };
 }
 
-export function createApiInvestigator(db: DatabaseSync): Investigator {
-  return createInvestigator(depsFromDatabase(db), loadLlmConfig());
+export function createApiInvestigator(
+  db: DatabaseSync,
+  settingsPath?: string,
+): Investigator {
+  const path = settingsPath ?? llmSettingsPathForDb(":memory:");
+  return createInvestigator(depsFromDatabase(db), () => resolveLlmConfig(path));
 }
 
 export function persistInvestigationResult(

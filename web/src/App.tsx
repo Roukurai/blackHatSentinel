@@ -6,6 +6,7 @@ import { FixtureBanner } from "./components/FixtureBanner";
 import { HealthIndicator, HealthPage } from "./components/Health";
 import { IncidentPage } from "./components/IncidentDetail";
 import { IncidentsPage } from "./components/IncidentList";
+import { SettingsPage } from "./components/Settings";
 import { EmptyState } from "./components/ui";
 
 export function App() {
@@ -23,6 +24,7 @@ export function App() {
           <Route path="/" element={<IncidentsPage />} />
           <Route path="/incidents/:id" element={<IncidentRoute />} />
           <Route path="/health" element={<HealthPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route
             path="*"
             element={
@@ -92,6 +94,9 @@ function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
         </NavLink>
         <NavLink to="/health" className={({ isActive }) => `tab${isActive ? " tab--active" : ""}`}>
           Health
+        </NavLink>
+        <NavLink to="/settings" className={({ isActive }) => `tab${isActive ? " tab--active" : ""}`}>
+          Settings
         </NavLink>
       </nav>
     </header>

@@ -6,7 +6,7 @@ import { flushAndFollowUp } from "./pipeline.ts";
 
 const config = loadConfig();
 const db = openDatabase(config.dbPath);
-const investigator = createApiInvestigator(db);
+const investigator = createApiInvestigator(db, config.llmSettingsPath);
 const stopProbe = investigator.startHealthProbe();
 const server = createServer({ config, db, investigator });
 const timer = setInterval(() => {

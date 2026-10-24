@@ -29,9 +29,10 @@ export type {
 
 export function createInvestigator(
   deps: InvestigatorDeps,
-  cfg: LlmConfig = loadLlmConfig(),
+  cfg: LlmConfig | (() => LlmConfig) = loadLlmConfig,
 ): Investigator {
-  const health = new HealthTracker(cfg);
+  const getCfg = typeof cfg === "function" ? cfg : () => cfg;
+  const health = new HealthTracker(getCfg);
   const inflight = new Map<string, Promise<Investigation>>();
 
   return {
@@ -39,7 +40,7 @@ export function createInvestigator(
       const existing = inflight.get(incidentId);
       if (existing) return existing;
 
-      const p = runInvestigation(deps, cfg, health, incidentId).finally(() => {
+      const p = runInvestigation(deps, getCfg(), health, incidentId).finally(() => {
         inflight.delete(incidentId);
       });
       inflight.set(incidentId, p);

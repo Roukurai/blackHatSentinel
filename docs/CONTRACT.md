@@ -149,6 +149,7 @@ Investigator tools (read-only): `get_incident_events(incident_id)`,
 | POST | `/actions/:id/approve` | Approve proposed response (policy re-checked) |
 | POST | `/actions/:id/reject` | Reject |
 | GET | `/health` | `{ collector_last_event_at, llm: "ok"|"down", telegram: "ok"|"failed", db: "ok" }` |
+| GET/PUT | `/settings/llm` | ⚖️ **PROPOSED** BYO OpenAI key — see [`docs/proposals/settings-llm.md`](proposals/settings-llm.md). Do not treat as confirmed until team agreement. |
 
 Dashboard and all non-ingest routes: HTTP basic auth (`DASHBOARD_USER` / `DASHBOARD_PASS`).
 
