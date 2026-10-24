@@ -32,5 +32,25 @@ Replay files hold real IPs + a key fingerprint — they live in
     # build the burst slice (one attacker IP) from it:
     grep -F "<burst_source_ip>" /var/lib/sentinel/replay/real.jsonl > /var/lib/sentinel/replay/demo-burst.jsonl
 
+## VPS setup
+On ubuntu-01 as `rou` (from a laptop copy of this repo, or after the first clone):
+
+    bash ops/setup-vps.sh --check
+    bash ops/setup-vps.sh --apply --allow <team-ip> ...
+    # edit /opt/sentinell/.env secrets (DASHBOARD_*, TELEGRAM_*; never commit)
+    bash ops/setup-vps.sh --apply --start
+    bash ops/setup-vps.sh --demo-user
+    bash ops/setup-vps.sh --verify
+
+Collector binary: `/usr/local/bin/sentinel-collector`.
+Units: `sentinel-api.service`, `sentinel-collector.service`.
+Logs:
+
+    journalctl -u sentinel-api -f
+    journalctl -u sentinel-collector -f
+
+`--check` is read-only. `--apply` is idempotent (skips phases already at target). Do not enable ufw; do not modify nft table `inet filter`.
+
 ## Reset between rehearsals
-    ./ops/reset.sh    # wipes incident DB + nft blocklist, keeps the journal
+    RESET_CONFIRM=1 ./ops/reset.sh    # wipes incident DB + nft blocklist, keeps the journal
+    # RESET_SETTINGS=1 also removes llm-settings.json next to the DB
