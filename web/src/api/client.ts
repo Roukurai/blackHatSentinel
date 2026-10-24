@@ -8,14 +8,14 @@ import type {
   SettingsOverview,
 } from "./types";
 
-// Same-origin requests. Basic-auth credentials are handled by the browser's
-// native prompt and attached automatically; nothing is stored in this code.
+// Same-origin requests. Sign-in sets an httpOnly session cookie; this code never
+// stores the password. Scripts can still send HTTP basic auth themselves.
 // The API serves JSON at the root; set VITE_API_BASE only if it moves under a prefix.
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 export const FIXTURE_MODE = import.meta.env.DEV && import.meta.env.VITE_FIXTURES === "1";
 
-export type ApiErrorKind = "network" | "auth" | "not_found" | "http";
+export type ApiErrorKind = "network" | "auth" | "setup" | "not_found" | "http";
 
 export class ApiError extends Error {
   constructor(
@@ -66,7 +66,11 @@ async function request<T>(
     throw new ApiError("network", "API unreachable");
   }
 
-  if (res.status === 401) throw new ApiError("auth", "Authentication required", 401);
+  if (res.status === 401) {
+    const reason = await errorReason(res);
+    if (reason === "setup_required") throw new ApiError("setup", "Create a dashboard password to continue.", 401);
+    throw new ApiError("auth", "Authentication required", 401);
+  }
   if (res.status === 404) throw new ApiError("not_found", "Not found", 404);
   // 403/409/422 may carry a reason, e.g. a policy rejection on approve. Rendered as text only.
   if (!res.ok) throw new ApiError("http", (await errorReason(res)) ?? `HTTP ${res.status}`, res.status);
@@ -105,6 +109,62 @@ function getApi(): Promise<Api> {
   if (!FIXTURE_MODE) return Promise.resolve(httpApi);
   fixtureApi ??= import("./fixtures").then((m) => m.fixtureApi);
   return fixtureApi;
+}
+
+export async function authStatus(signal?: AbortSignal): Promise<{ configured: boolean }> {
+  return request("GET", "/auth/status", signal);
+}
+
+export async function setupAccount(username: string, password: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/setup`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch {
+    throw new ApiError("network", "API unreachable");
+  }
+  if (res.status === 409) throw new ApiError("http", "A password is already set. Sign in with it.", 409);
+  if (res.status === 429) throw new ApiError("http", "Too many attempts. Wait a minute and try again.", 429);
+  if (!res.ok) throw new ApiError("http", (await errorReason(res)) ?? `HTTP ${res.status}`, res.status);
+}
+
+export async function login(username: string, password: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch {
+    throw new ApiError("network", "API unreachable");
+  }
+  if (res.status === 401) {
+    const reason = await errorReason(res);
+    if (reason === "setup_required") throw new ApiError("setup", "Create a dashboard password to continue.", 401);
+    throw new ApiError("auth", "Username or password is wrong.", 401);
+  }
+  if (res.status === 429) throw new ApiError("http", "Too many attempts. Wait a minute and try again.", 429);
+  if (!res.ok) throw new ApiError("http", (await errorReason(res)) ?? `HTTP ${res.status}`, res.status);
+}
+
+export async function logout(): Promise<void> {
+  // A bogus Authorization value replaces any basic-auth credentials the browser
+  // cached for this origin. Otherwise sign-out clears the cookie and the browser
+  // immediately sends the saved password again.
+  await fetch(`${API_BASE}/logout`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Basic ${btoa("logout:logout")}`,
+    },
+  }).catch(() => undefined);
 }
 
 export const api: Api = {

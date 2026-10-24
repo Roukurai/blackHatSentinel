@@ -1,12 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "./client";
+import { api, ApiError, authStatus } from "./client";
 import type { LlmSettingsUpdate } from "./types";
 
 const POLL_MS = 2000;
 
 // Stop polling a resource that does not exist or needs a login prompt.
 function pollUnlessFatal(error: unknown) {
-  return error instanceof ApiError && (error.kind === "not_found" || error.kind === "auth") ? false : POLL_MS;
+  return error instanceof ApiError && (error.kind === "not_found" || error.kind === "auth" || error.kind === "setup") ? false : POLL_MS;
 }
 
 export const keys = {
@@ -17,10 +17,20 @@ export const keys = {
   overview: ["settingsOverview"] as const,
 };
 
-export function useHealth() {
+export function useAuthStatus() {
+  return useQuery({
+    queryKey: ["authStatus"] as const,
+    queryFn: ({ signal }) => authStatus(signal),
+    retry: false,
+    staleTime: 5_000,
+  });
+}
+
+export function useHealth(enabled = true) {
   return useQuery({
     queryKey: keys.health,
     queryFn: ({ signal }) => api.health(signal),
+    enabled,
     refetchInterval: (q) => pollUnlessFatal(q.state.error),
   });
 }

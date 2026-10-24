@@ -1305,6 +1305,56 @@ kbd {
 .layout__scrim { display: none; }
 .page--narrow { max-width: 760px; }
 
+/* ============ sign-in ============ */
+.login {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(ellipse 70% 42% at 50% -8%, oklch(0.66 0.22 31 / 14%), transparent 62%),
+    var(--ds-background-100);
+}
+
+.login__card {
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ds-gray-900);
+}
+
+.login__form .g-btn { width: 100%; }
+
+.login__foot {
+  margin: 0;
+  color: var(--ds-gray-700);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* ============ settings ============ */
 .card--pad { padding: 20px; }
 .status-card { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 14px 20px; }

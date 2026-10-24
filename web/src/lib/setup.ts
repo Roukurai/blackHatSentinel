@@ -23,8 +23,8 @@ export function setupSteps(o: SettingsOverview, health: Health | undefined): Set
       optional: false,
       state: o.dashboard_auth ? "done" : "todo",
       status: o.dashboard_auth
-        ? "Basic auth is on for the dashboard and API."
-        : "No dashboard password set. The API only answers on localhost until you set one.",
+        ? "Sign-in is required. MCP must present the same username and password."
+        : "Choose a username and password on the sign-in screen. The dashboard stays locked until you do.",
     },
     {
       id: "ai",

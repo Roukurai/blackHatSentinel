@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { authPathForDb } from "./dashboard-auth.ts";
 import { llmSettingsPathForDb } from "./llm-settings.ts";
 import type { Config } from "./types.ts";
 
@@ -58,6 +59,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     llmSettingsPath: llmSettingsPathForDb(dbPath),
     dashboardUser: pick(file, env, "DASHBOARD_USER"),
     dashboardPass: pick(file, env, "DASHBOARD_PASS"),
+    dashboardAuthPath: authPathForDb(dbPath),
     telegramToken: pick(file, env, "TELEGRAM_BOT_TOKEN"),
     telegramChatId: pick(file, env, "TELEGRAM_CHAT_ID"),
     notifyCooldownSeconds: integer(pick(file, env, "NOTIFY_COOLDOWN_SECONDS", "300"), 300),

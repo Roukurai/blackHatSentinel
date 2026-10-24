@@ -10,13 +10,13 @@ From the repository root, with Node 22.18+ (Node 24 on the VPS):
 node --experimental-strip-types api/src/index.ts
 ```
 
-The process reads the repo `.env`. Set OpenAI `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` for live investigations, or use dashboard **Settings** (`GET/PUT /settings/llm`) to bring your own key without restart. `POST /events` is localhost only. Dashboard routes use HTTP basic auth when `DASHBOARD_USER` / `DASHBOARD_PASS` are set.
+The process reads the repo `.env`. Set OpenAI `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` for live investigations, or use dashboard **Settings** (`GET/PUT /settings/llm`) to bring your own key without restart. `POST /events` is localhost only. On first launch, with no dashboard password, `GET /auth/status` reports `configured: false` and every other dashboard route returns `401 setup_required`. `POST /setup` stores a hash beside the database and starts the session. After that, routes accept the session cookie from `POST /login` or HTTP basic auth. `DASHBOARD_USER` / `DASHBOARD_PASS` are the same gate when set in `.env` before a password is chosen in the browser.
 
 Read-only MCP: `sentinell mcp` (see [`docs/MCP.md`](../docs/MCP.md)).
 
 ## Dashboard
 
-Build once with `npm ci --prefix web && npm run build --prefix web`. The API serves `web/dist` (override with `WEB_DIST`) behind the same basic auth. Browser navigations (`Accept: text/html`) get the SPA, so the Telegram link `PUBLIC_BASE_URL/incidents/<id>` opens the dashboard; API calls (`Accept: application/json`) get JSON from the same paths.
+Build once with `npm ci --prefix web && npm run build --prefix web`. The API serves `web/dist` (override with `WEB_DIST`). Browser navigations (`Accept: text/html`) and static assets are public so the sign-in page can render; API calls (`Accept: application/json`) stay behind the session or basic auth. The Telegram link `PUBLIC_BASE_URL/incidents/<id>` opens the dashboard, then the sign-in screen if a password is set. `POST /logout` clears the cookie. Failed sign-ins are limited to 8 per minute per address.
 
 ## Response actions (P1)
 

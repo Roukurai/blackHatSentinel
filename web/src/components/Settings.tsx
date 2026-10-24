@@ -367,7 +367,7 @@ export function HostSettingsPage() {
             <span className="mono">{o.host_id || "—"}</span>
           </Row>
           <Row label="Dashboard access">
-            <StatusDot tone={o.dashboard_auth ? "green" : "amber"} label={o.dashboard_auth ? "Password protected (basic auth)" : "No password · localhost only"} />
+            <StatusDot tone={o.dashboard_auth ? "green" : "amber"} label={o.dashboard_auth ? "Sign-in required" : "No password · localhost only"} />
           </Row>
           <Row label="Collector">
             {o.collector.last_event_at ? (
@@ -395,6 +395,7 @@ export function HostSettingsPage() {
           { name: "DETECT_FAST_COUNT", example: String(d.fast_count) },
           { name: "DETECT_FAST_WINDOW_SECONDS", example: String(d.fast_window_seconds) },
         ]}
+        note="Leave DASHBOARD_USER and DASHBOARD_PASS empty to choose them in the browser on first launch. That password is what MCP must present."
       />
     </div>
   );

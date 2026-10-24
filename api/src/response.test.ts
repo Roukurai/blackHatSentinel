@@ -21,8 +21,8 @@ function config(overrides: Partial<Config> = {}): Config {
     publicBaseUrl: "http://127.0.0.1:8080",
     dbPath: ":memory:",
     llmSettingsPath: "/tmp/sentinel-test-llm-settings.json",
-    dashboardUser: "",
-    dashboardPass: "",
+    dashboardUser: "analyst",
+    dashboardPass: "secret",
     telegramToken: "test-token",
     telegramChatId: "1",
     notifyCooldownSeconds: 300,
@@ -53,9 +53,15 @@ async function start(cfg: Config, send: SendText = async () => {}) {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const authorization = `Basic ${Buffer.from(`${cfg.dashboardUser}:${cfg.dashboardPass}`).toString("base64")}`;
   const post = (p: string, body?: unknown) =>
-    fetch(`${base}${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const get = (p: string, accept = "application/json") => fetch(`${base}${p}`, { headers: { accept } });
+    fetch(`${base}${p}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(cfg.dashboardUser ? { authorization } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  const get = (p: string, accept = "application/json") =>
+    fetch(`${base}${p}`, { headers: { accept, ...(cfg.dashboardUser ? { authorization } : {}) } });
   return { server, post, get };
 }
 
@@ -161,7 +167,7 @@ test("serves the dashboard for browser navigations and JSON for API calls", asyn
 });
 
 test("settings overview reports configuration without secrets", async () => {
-  const { server, post, get } = await start(config({ dashboardUser: "", telegramToken: "secret-token-value" }));
+    const { server, post, get } = await start(config({ telegramToken: "secret-token-value" }));
   try {
     await post("/events", burst("203.0.113.50"));
     const res = await get("/settings/overview");
@@ -176,7 +182,7 @@ test("settings overview reports configuration without secrets", async () => {
       response: { allowlist: string[]; runner_configured: boolean };
     };
     assert.equal(body.host_id, "ubuntu-01");
-    assert.equal(body.dashboard_auth, false);
+    assert.equal(body.dashboard_auth, true);
     assert.equal(body.telegram.configured, true);
     assert.equal(body.collector.events, 5);
     assert.equal(body.collector.incidents, 1);

@@ -13,8 +13,9 @@ const queryClient = new QueryClient({
     queries: {
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
-      // Auth and 404 are answers, not transient failures; the browser's login prompt handles 401.
-      retry: (count, err) => !(err instanceof ApiError && (err.kind === "auth" || err.kind === "not_found")) && count < 1,
+      // Auth and 404 are answers, not transient failures. A 401 opens the sign-in screen.
+      retry: (count, err) =>
+        !(err instanceof ApiError && (err.kind === "auth" || err.kind === "setup" || err.kind === "not_found")) && count < 1,
     },
   },
 });

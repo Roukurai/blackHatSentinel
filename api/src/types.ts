@@ -104,6 +104,8 @@ export interface Config {
   llmSettingsPath: string;
   dashboardUser: string;
   dashboardPass: string;
+  /** Hashed password file. Empty skips the file and uses the env password. */
+  dashboardAuthPath?: string;
   telegramToken: string;
   telegramChatId: string;
   notifyCooldownSeconds: number;

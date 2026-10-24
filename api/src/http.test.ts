@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { openDatabase } from "./db.ts";
+import { envSessionSecret } from "./dashboard-auth.ts";
 import { createMcpToken, revokeMcpToken } from "./mcp/tokens.ts";
 import { createServer } from "./server.ts";
+import { issueSessionToken } from "./session.ts";
 import type { Config, SentinelEvent } from "./types.ts";
 
 function config(overrides: Partial<Config> = {}): Config {
@@ -18,8 +20,8 @@ function config(overrides: Partial<Config> = {}): Config {
     publicBaseUrl: "http://127.0.0.1:8080",
     dbPath: ":memory:",
     llmSettingsPath: "/tmp/sentinel-test-llm-settings.json",
-    dashboardUser: "",
-    dashboardPass: "",
+    dashboardUser: "analyst",
+    dashboardPass: "secret",
     telegramToken: "test-token",
     telegramChatId: "1",
     notifyCooldownSeconds: 300,
@@ -32,6 +34,10 @@ function config(overrides: Partial<Config> = {}): Config {
     llmBaseUrl: "",
     ...overrides,
   };
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return { authorization: `Basic ${Buffer.from("analyst:secret").toString("base64")}`, ...extra };
 }
 
 function batch(): SentinelEvent[] {
@@ -74,13 +80,13 @@ test("localhost ingest creates an incident and serves it", async () => {
   assert.equal(sent[0].includes("RAW_SHOULD_NOT_LEAK"), false);
   assert.equal(sent[0].includes("root"), false);
 
-  const listed = await fetch(`${base}/incidents`);
+  const listed = await fetch(`${base}/incidents`, { headers: authHeaders() });
   assert.equal(listed.status, 200);
   const incidents = await listed.json() as Array<{ id: string; severity: string }>;
   assert.equal(incidents.length, 1);
   assert.equal(incidents[0].severity, "medium");
 
-  const detail = await fetch(`${base}/incidents/${incidents[0].id}`);
+  const detail = await fetch(`${base}/incidents/${incidents[0].id}`, { headers: authHeaders() });
   const body = await detail.json() as { events: Array<{ username: string }>; notification: { status: string } };
   assert.equal(body.notification.status, "sent");
   assert.ok(body.events.some((event) => event.username === ""));
@@ -89,7 +95,7 @@ test("localhost ingest creates an incident and serves it", async () => {
   let investigation: { status?: string } | null = null;
   for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 20));
-    const again = await fetch(`${base}/incidents/${incidents[0].id}`);
+    const again = await fetch(`${base}/incidents/${incidents[0].id}`, { headers: authHeaders() });
     const payload = await again.json() as { investigation: { status?: string } | null; status: string };
     if (payload.investigation) {
       investigation = payload.investigation;
@@ -100,12 +106,12 @@ test("localhost ingest creates an incident and serves it", async () => {
   }
   assert.ok(investigation, "expected investigation to be persisted");
 
-  const rerun = await fetch(`${base}/incidents/${incidents[0].id}/investigate`, { method: "POST" });
+  const rerun = await fetch(`${base}/incidents/${incidents[0].id}/investigate`, { method: "POST", headers: authHeaders() });
   assert.equal(rerun.status, 200);
   const rerunBody = await rerun.json() as { status: string };
   assert.equal(rerunBody.status, "unavailable");
 
-  const health = await fetch(`${base}/health`);
+  const health = await fetch(`${base}/health`, { headers: authHeaders() });
   assert.deepEqual(await health.json(), {
     collector_last_event_at: "2026-10-24T22:00:05.000Z",
     llm: "down",
@@ -144,7 +150,7 @@ test("PUT /settings/llm stores key without echoing it", async () => {
 
   const put = await fetch(`${base}/settings/llm`, {
     method: "PUT",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       apiKey: "sk-live-secret-key-9999",
       model: "gpt-4o-mini",
@@ -158,7 +164,7 @@ test("PUT /settings/llm stores key without echoing it", async () => {
   assert.equal(body.model, "gpt-4o-mini");
   assert.ok(!JSON.stringify(body).includes("sk-live-secret-key-9999"));
 
-  const get = await fetch(`${base}/settings/llm`);
+  const get = await fetch(`${base}/settings/llm`, { headers: authHeaders() });
   assert.equal(get.status, 200);
   const got = await get.json() as { keyLast4: string };
   assert.equal(got.keyLast4, "9999");
@@ -292,4 +298,131 @@ test("POST /mcp requires Bearer token; tools/list works with valid token", async
   server.close();
   await once(server, "close");
   db.close();
+});
+
+test("session login gates JSON and leaves the dashboard shell public", async () => {
+  const dist = mkdtempSync(path.join(tmpdir(), "sentinel-login-"));
+  writeFileSync(path.join(dist, "index.html"), "<!doctype html><title>Sentinell</title>");
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config({ dashboardUser: "analyst", dashboardPass: "secret", webDist: dist }),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
+
+  const page = await fetch(`${base}/`, { headers: { accept: "text/html" } });
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Sentinell/);
+
+  const denied = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  assert.equal(denied.status, 401);
+
+  const bad = await fetch(`${base}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ username: "analyst", password: "nope" }),
+  });
+  assert.equal(bad.status, 401);
+  assert.equal(JSON.stringify(await bad.json()).includes("nope"), false);
+
+  const good = await fetch(`${base}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ username: "analyst", password: "secret" }),
+  });
+  assert.equal(good.status, 200);
+  const setCookie = good.headers.get("set-cookie") ?? "";
+  assert.match(setCookie, /sentinel_session=/);
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Strict/i);
+  assert.equal(JSON.stringify(await good.json()).includes("secret"), false);
+  const cookie = setCookie.split(";")[0];
+
+  const allowedByCookie = await fetch(`${base}/health`, { headers: { cookie, accept: "application/json" } });
+  assert.equal(allowedByCookie.status, 200);
+
+  const expired = issueSessionToken(envSessionSecret("analyst", "secret"), Math.floor(Date.now() / 1000) - 10);
+  const stale = await fetch(`${base}/health`, {
+    headers: { cookie: `sentinel_session=${expired}`, accept: "application/json" },
+  });
+  assert.equal(stale.status, 401);
+
+  const forged = await fetch(`${base}/health`, {
+    headers: { cookie: "sentinel_session=9999999999.not-a-signature", accept: "application/json" },
+  });
+  assert.equal(forged.status, 401);
+
+  const out = await fetch(`${base}/logout`, { method: "POST", headers: { cookie } });
+  assert.match(out.headers.get("set-cookie") ?? "", /Max-Age=0/i);
+  const after = await fetch(`${base}/health`, { headers: { cookie, accept: "application/json" } });
+  assert.equal(after.status, 401);
+
+  server.close();
+  await once(server, "close");
+  db.close();
+  rmSync(dist, { recursive: true, force: true });
+});
+
+test("first launch requires choosing a password, then that password signs in", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "sentinel-setup-"));
+  const authPath = path.join(dir, "dashboard-auth.json");
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config({ dashboardUser: "", dashboardPass: "", dashboardAuthPath: authPath }),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  const status = await fetch(`${base}/auth/status`);
+  assert.deepEqual(await status.json(), { configured: false });
+  const locked = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  assert.equal(locked.status, 401);
+  assert.equal((await locked.json() as { error: string }).error, "setup_required");
+
+  const weak = await fetch(`${base}/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "analyst", password: "short" }),
+  });
+  assert.equal(weak.status, 400);
+
+  const created = await fetch(`${base}/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "analyst", password: "choose-a-long-password" }),
+  });
+  assert.equal(created.status, 200);
+  const stored = readFileSync(authPath, "utf8");
+  assert.equal(stored.includes("choose-a-long-password"), false);
+  assert.match(stored, /scrypt:/);
+  const cookie = (created.headers.get("set-cookie") ?? "").split(";")[0];
+  const health = await fetch(`${base}/health`, { headers: { cookie, accept: "application/json" } });
+  assert.equal(health.status, 200);
+
+  const again = await fetch(`${base}/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "other", password: "another-long-password" }),
+  });
+  assert.equal(again.status, 409);
+
+  await fetch(`${base}/logout`, { method: "POST", headers: { cookie } });
+  const relogin = await fetch(`${base}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "analyst", password: "choose-a-long-password" }),
+  });
+  assert.equal(relogin.status, 200);
+
+  server.close();
+  await once(server, "close");
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
 });

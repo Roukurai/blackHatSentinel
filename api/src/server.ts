@@ -1,5 +1,4 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { addCounter, eventsByIds, hasFailedNotification, incidentById, latestEventTimestamp, listIncidentRecords, toIncident } from "./db.ts";
 import { ingest } from "./ingest.ts";
@@ -19,6 +18,8 @@ import {
 import type { SendText } from "./notify.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
 import { settingsOverview } from "./overview.ts";
+import { AuthExistsError, createStoredAuth, credentialsMatch, identityFor, validateNewAccount, type DashboardIdentity } from "./dashboard-auth.ts";
+import { clearAttempts, clearSessionCookie, hasValidSession, recordFailure, revokeSession, sessionCookie, tooManyAttempts } from "./session.ts";
 import type { Config, Incident, SentinelEvent } from "./types.ts";
 import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
@@ -46,22 +47,84 @@ export function isLoopback(address: string | undefined): boolean {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
-function safeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length) return false;
-  return timingSafeEqual(left, right);
-}
-
-function authorized(req: IncomingMessage, config: Config): boolean {
-  if (!config.dashboardUser || !config.dashboardPass) return isLoopback(req.socket.remoteAddress);
+function presentedBasic(req: IncomingMessage): { username: string; password: string } | null {
   const header = req.headers.authorization ?? "";
-  if (!header.startsWith("Basic ")) return false;
+  if (!header.startsWith("Basic ")) return null;
   const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
   const split = decoded.indexOf(":");
-  if (split < 0) return false;
-  return safeEqual(decoded.slice(0, split), config.dashboardUser)
-    && safeEqual(decoded.slice(split + 1), config.dashboardPass);
+  if (split < 0) return null;
+  return { username: decoded.slice(0, split), password: decoded.slice(split + 1) };
+}
+
+function authorized(req: IncomingMessage, identity: DashboardIdentity | null): boolean {
+  if (!identity) return false;
+  const basic = presentedBasic(req);
+  if (basic && credentialsMatch(identity, basic.username, basic.password)) return true;
+  return hasValidSession(req.headers.cookie, identity.sessionSecret);
+}
+
+function clientIp(req: IncomingMessage): string {
+  return req.socket.remoteAddress ?? "unknown";
+}
+
+function readJsonObject(text: string): Record<string, unknown> {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new HttpError(400, "body must be JSON");
+  }
+  if (!body || typeof body !== "object") throw new HttpError(400, "body must be an object");
+  return body as Record<string, unknown>;
+}
+
+function establishSession(res: ServerResponse, identity: DashboardIdentity): void {
+  res.setHeader("set-cookie", sessionCookie(identity.sessionSecret));
+  res.setHeader("cache-control", "no-store");
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleLogin(req: IncomingMessage, res: ServerResponse, config: Config): Promise<void> {
+  const identity = identityFor(config);
+  if (!identity) throw new HttpError(401, "setup_required");
+  const ip = clientIp(req);
+  if (tooManyAttempts(ip)) throw new HttpError(429, "too many attempts");
+  const body = readJsonObject(await readBody(req));
+  const username = typeof body.username === "string" ? body.username : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  if (username.length > 256 || password.length > 256 || !credentialsMatch(identity, username, password)) {
+    recordFailure(ip);
+    throw new HttpError(401, "invalid credentials");
+  }
+  clearAttempts(ip);
+  establishSession(res, identity);
+}
+
+async function handleSetup(req: IncomingMessage, res: ServerResponse, config: Config): Promise<void> {
+  if (identityFor(config)) throw new HttpError(409, "already configured");
+  if (!config.dashboardAuthPath) throw new HttpError(500, "dashboard auth path is not configured");
+  const ip = clientIp(req);
+  if (tooManyAttempts(ip)) throw new HttpError(429, "too many attempts");
+  const body = readJsonObject(await readBody(req));
+  const account = validateNewAccount(body.username, body.password);
+  if (typeof account === "string") throw new HttpError(400, account);
+  let stored;
+  try {
+    stored = createStoredAuth(config.dashboardAuthPath, account.username, account.password);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST" || err instanceof AuthExistsError) {
+      throw new HttpError(409, "already configured");
+    }
+    throw err;
+  }
+  clearAttempts(ip);
+  establishSession(res, {
+    username: stored.username,
+    sessionSecret: stored.sessionSecret,
+    source: "file",
+    passwordHash: stored.passwordHash,
+    password: null,
+  });
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -104,7 +167,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     return;
   }
 
-  // Remote MCP: Bearer token only (not dashboard Basic auth). Before auth gate.
+  // Remote MCP: Bearer token only (not dashboard Basic auth). Before the dashboard gate.
   if (path === "/mcp") {
     if (req.method !== "POST") throw new HttpError(405, "method not allowed");
     const text = await readBody(req);
@@ -113,12 +176,41 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     return;
   }
 
-  if (!authorized(req, config)) {
-    res.setHeader("www-authenticate", 'Basic realm="sentinel"');
-    throw new HttpError(401, "unauthorized");
+  if (path === "/auth/status" && req.method === "GET") {
+    sendJson(res, 200, { configured: identityFor(config) !== null });
+    return;
   }
 
+  if (path === "/login" && req.method === "POST") {
+    await handleLogin(req, res, config);
+    return;
+  }
+
+  if (path === "/setup" && req.method === "POST") {
+    await handleSetup(req, res, config);
+    return;
+  }
+
+  if (path === "/logout" && req.method === "POST") {
+    const identity = identityFor(config);
+    if (identity) revokeSession(req.headers.cookie, identity.sessionSecret);
+    res.setHeader("set-cookie", clearSessionCookie());
+    res.setHeader("cache-control", "no-store");
+    // 401 makes the browser drop cached basic-auth credentials for this origin.
+    res.setHeader("www-authenticate", 'Basic realm="sentinel"');
+    sendJson(res, 401, { ok: true });
+    return;
+  }
+
+  // The SPA shell has no incidents or secrets. It has to load before sign-in,
+  // otherwise the browser's native prompt replaces the dashboard login screen.
   if (config.webDist && (await serveWeb(req, res, config.webDist, path))) return;
+
+  const identity = identityFor(config);
+  if (!authorized(req, identity)) {
+    if (!identity) throw new HttpError(401, "setup_required");
+    throw new HttpError(401, "unauthorized");
+  }
 
   if (path === "/health" && req.method === "GET") {
     sendJson(res, 200, {

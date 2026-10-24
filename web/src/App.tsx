@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
-import { useHealth, useIncidents } from "./api/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { ApiError, FIXTURE_MODE, logout } from "./api/client";
+import { useAuthStatus, useHealth, useIncidents } from "./api/queries";
 import { CommandPalette, MOD_KEY, useCommandPaletteHotkey } from "./components/CommandPalette";
 import { FixtureBanner } from "./components/FixtureBanner";
 import { HealthIndicator, HealthPage } from "./components/Health";
 import { IncidentPage } from "./components/IncidentDetail";
 import { IncidentsPage } from "./components/IncidentList";
+import { AuthBoot, LoginScreen, SetupPassword } from "./components/Login";
 import { AiSettingsPage, HostSettingsPage, NotificationsSettingsPage, ResponseSettingsPage } from "./components/Settings";
 import { SetupPage } from "./components/Setup";
 import { Sidebar } from "./components/Sidebar";
@@ -13,6 +16,33 @@ import { EmptyState } from "./components/ui";
 import { isNarrowViewport, useCollapsedSidebar, useModHotkey } from "./lib/hotkeys";
 
 export function App() {
+  if (FIXTURE_MODE) return <Workspace />;
+  return <GuardedWorkspace />;
+}
+
+function GuardedWorkspace() {
+  const status = useAuthStatus();
+  const configured = status.data?.configured === true;
+  const health = useHealth(configured);
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries();
+  const needsSetup =
+    status.data?.configured === false || (health.error instanceof ApiError && health.error.kind === "setup");
+  const needsLogin = health.error instanceof ApiError && health.error.kind === "auth";
+
+  if (status.isPending) return <AuthBoot />;
+  if (needsSetup) return <SetupPassword onSuccess={refresh} />;
+  if (needsLogin) return <LoginScreen onSuccess={refresh} />;
+  if (health.isPending && !health.data) return <AuthBoot />;
+
+  const signOut = async () => {
+    await logout();
+    await refresh();
+  };
+  return <Workspace onSignOut={() => void signOut()} />;
+}
+
+function Workspace({ onSignOut }: { onSignOut?: () => void }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useCollapsedSidebar();
@@ -39,8 +69,11 @@ export function App() {
         onToggleNav={() => setNavOpen((o) => !o)}
         collapsed={collapsed}
         onToggleSidebar={toggleSidebar}
+        onSignOut={onSignOut}
       />
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onToggleSidebar={toggleSidebar} />}
+      {paletteOpen && (
+        <CommandPalette onClose={() => setPaletteOpen(false)} onToggleSidebar={toggleSidebar} onSignOut={onSignOut} />
+      )}
       <div className={`layout${navOpen ? " layout--nav-open" : ""}${collapsed ? " layout--collapsed" : ""}`}>
         <Sidebar />
         {navOpen && <button type="button" className="layout__scrim" aria-label="Close menu" onClick={() => setNavOpen(false)} />}
@@ -91,12 +124,14 @@ function Header({
   onToggleNav,
   collapsed,
   onToggleSidebar,
+  onSignOut,
 }: {
   onOpenPalette: () => void;
   navOpen: boolean;
   onToggleNav: () => void;
   collapsed: boolean;
   onToggleSidebar: () => void;
+  onSignOut?: () => void;
 }) {
   const health = useHealth();
   const incidents = useIncidents();
@@ -152,6 +187,11 @@ function Header({
             {MOD_KEY} K
           </kbd>
         </button>
+        {onSignOut && (
+          <button type="button" className="g-btn g-btn--secondary g-btn--sm" onClick={onSignOut}>
+            Sign out
+          </button>
+        )}
         <HealthIndicator />
       </div>
     </header>

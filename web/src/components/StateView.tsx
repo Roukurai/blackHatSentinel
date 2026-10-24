@@ -3,10 +3,10 @@ import { EmptyState, Note, Skeleton } from "./ui";
 
 export function ErrorState({ error, what }: { error: unknown; what: string }) {
   if (error instanceof ApiError) {
-    if (error.kind === "auth")
+    if (error.kind === "auth" || error.kind === "setup")
       return (
         <Note type="warning" label="Authentication required">
-          Reload the page to sign in.
+          {error.kind === "setup" ? "Create a dashboard password to continue." : "Sign in to continue."}
         </Note>
       );
     if (error.kind === "not_found") return <EmptyState title={`${what} not found`}>It may have been removed, or the link is wrong.</EmptyState>;

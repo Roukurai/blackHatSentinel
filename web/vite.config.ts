@@ -1,8 +1,8 @@
 import { defineConfig, loadEnv, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Dev only: forward API calls to the API. Basic-auth 401s pass through, so the
-// browser shows its native login prompt. No credentials live here.
+// Dev only: forward API calls to the API. A 401 means "show the sign-in screen";
+// credentials stay in the session cookie, never in this file.
 //
 // The API serves JSON at the root (/health, /incidents, /incidents/:id), which
 // collides with the SPA deep link /incidents/:id. Browser navigations ask for
@@ -20,7 +20,16 @@ export default defineConfig(({ mode }) => {
 
   const proxy: Record<string, ProxyOptions> = apiBase
     ? { [apiBase]: toApi }
-    : { "/health": toApi, "/incidents": toApi, "/actions": toApi };
+    : {
+        "/health": toApi,
+        "/incidents": toApi,
+        "/actions": toApi,
+        "/settings": toApi,
+        "/login": toApi,
+        "/logout": toApi,
+        "/setup": toApi,
+        "/auth": toApi,
+      };
 
   return {
     plugins: [react()],

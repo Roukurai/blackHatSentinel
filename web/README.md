@@ -46,8 +46,10 @@ status or pattern. It only navigates; approving a block always goes through the 
   Requests send `Accept: application/json`; `/incidents/:id` is also the SPA deep link used in
   Telegram. The API serves `web/dist` and returns `index.html` for `Accept: text/html`
   navigations; the Vite dev proxy does the same. `VITE_API_BASE` sets a prefix if the API moves.
-- Basic auth: the API answers 401 with `WWW-Authenticate`; the browser prompts and caches the
-  credentials. No credentials live in this code.
+- First launch (`GET /auth/status` → `configured: false`) shows the password setup screen.
+  `POST /setup` stores a hash on the server and signs in. Later visits use `POST /login`.
+  The session cookie is httpOnly. `POST /logout` clears it. Scripts can still send HTTP basic auth.
+  MCP must present the same username and password.
 - `Incident.origin` drives the list Replay badge; `Health.host_id` names the host in the header.
 - `POST /incidents/:id/investigate` and `POST /actions/:id/approve|reject` are live. If an API
   without them is used, the UI shows "Not available yet" instead of failing.

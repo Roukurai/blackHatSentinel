@@ -60,7 +60,15 @@ export function useCommandPaletteHotkey(onToggle: () => void) {
   useModHotkey("k", onToggle);
 }
 
-export function CommandPalette({ onClose, onToggleSidebar }: { onClose: () => void; onToggleSidebar: () => void }) {
+export function CommandPalette({
+  onClose,
+  onToggleSidebar,
+  onSignOut,
+}: {
+  onClose: () => void;
+  onToggleSidebar: () => void;
+  onSignOut?: () => void;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const navigate = useNavigate();
@@ -79,9 +87,12 @@ export function CommandPalette({ onClose, onToggleSidebar }: { onClose: () => vo
     const incidents = [...(data ?? [])].sort((a, b) => b.last_seen.localeCompare(a.last_seen)).map((i) => incidentItem(i, now));
     const actions: Item[] = [
       { id: "act-sidebar", group: "Actions", label: "Toggle sidebar", hint: `${MOD_KEY} B`, keywords: "sidebar collapse expand menu navigation", run: onToggleSidebar },
+      ...(onSignOut
+        ? [{ id: "act-signout", group: "Actions" as const, label: "Sign out", keywords: "logout log out session lock", run: onSignOut }]
+        : []),
     ];
     return [...PAGES, ...actions, ...incidents].filter((i) => matches(i, query));
-  }, [data, now, query, onToggleSidebar]);
+  }, [data, now, query, onToggleSidebar, onSignOut]);
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {

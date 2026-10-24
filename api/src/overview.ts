@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { identityFor } from "./dashboard-auth.ts";
 import { latestEventTimestamp } from "./db.ts";
 import { publicLlmSettings } from "./llm-settings.ts";
 import type { Config } from "./types.ts";
@@ -26,7 +27,7 @@ export function settingsOverview(db: DatabaseSync, config: Config): SettingsOver
   return {
     host_id: config.hostId ?? "",
     public_base_url: config.publicBaseUrl,
-    dashboard_auth: Boolean(config.dashboardUser && config.dashboardPass),
+    dashboard_auth: identityFor(config) !== null,
     telegram: { configured: Boolean(config.telegramToken && config.telegramChatId), cooldown_seconds: config.notifyCooldownSeconds },
     llm: { configured: llm.configured, active_provider: llm.activeProvider, model: llm.model, source: llm.source },
     collector: { last_event_at: latestEventTimestamp(db), events: count(db, "events"), incidents: count(db, "incidents") },
