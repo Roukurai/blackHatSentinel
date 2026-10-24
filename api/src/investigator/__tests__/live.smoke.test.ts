@@ -1,0 +1,79 @@
+/**
+ * Live Grok smoke — skipped unless LIVE_LLM=1 and LLM_API_KEY is set.
+ *
+ *   LIVE_LLM=1 LLM_API_KEY=… LLM_MODEL=grok-4-1-fast-non-reasoning npm test -- live.smoke
+ */
+import { describe, expect, it } from "vitest";
+import { createInvestigator, loadLlmConfig } from "../index.js";
+import {
+  allFixtureDeps,
+  benignIncident,
+  demoEvents,
+  demoIncident,
+  benignEvents,
+} from "./fixtures.js";
+
+const live = process.env.LIVE_LLM === "1" && Boolean(process.env.LLM_API_KEY);
+
+describe.runIf(live)("live Grok smoke", () => {
+  const cfg = loadLlmConfig();
+
+  it(
+    "demo success_after_failures returns ok with grounded evidence",
+    async () => {
+      const inv = createInvestigator(allFixtureDeps(), cfg);
+      const r = await inv.investigate(demoIncident.id);
+      console.log(
+        "[live.smoke] demo",
+        r.status,
+        `duration_ms=${r.duration_ms}`,
+        r.summary.slice(0, 120),
+      );
+      expect(r.status).toBe("ok");
+      const known = new Set(demoEvents.map((e) => e.event_id));
+      for (const f of r.findings) {
+        for (const id of f.evidence) expect(known.has(id)).toBe(true);
+        if (f.kind === "observed") {
+          expect(f.statement).not.toMatch(
+            /compromis|breach|gained access|intrusion confirmed/i,
+          );
+        }
+      }
+    },
+    60_000,
+  );
+
+  it(
+    "benign new_ip known key keeps uncertainty",
+    async () => {
+      const inv = createInvestigator(allFixtureDeps(), cfg);
+      const r = await inv.investigate(benignIncident.id);
+      console.log(
+        "[live.smoke] benign",
+        r.status,
+        `duration_ms=${r.duration_ms}`,
+        r.summary.slice(0, 120),
+      );
+      expect(r.status).toBe("ok");
+      const known = new Set(benignEvents.map((e) => e.event_id));
+      for (const f of r.findings) {
+        for (const id of f.evidence) expect(known.has(id)).toBe(true);
+      }
+      expect(
+        r.findings.some(
+          (f) =>
+            f.kind === "unknown" ||
+            /cannot|uncertain|not confirm|informational/i.test(f.statement) ||
+            /cannot|uncertain|not confirm/i.test(r.summary),
+        ),
+      ).toBe(true);
+    },
+    60_000,
+  );
+});
+
+describe.runIf(!live)("live Grok smoke (skipped)", () => {
+  it("set LIVE_LLM=1 and LLM_API_KEY to enable", () => {
+    expect(true).toBe(true);
+  });
+});

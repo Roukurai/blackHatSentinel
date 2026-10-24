@@ -1,0 +1,34 @@
+{
+  "status": "ok",
+  "summary": "Source 203.0.113.77 produced multiple failed password attempts for user demo, then an Accepted password login. This is suspicious (possible credential use) but not proof of compromise.",
+  "findings": [
+    {
+      "kind": "observed",
+      "statement": "Six failed password attempts for demo from 203.0.113.77 preceded a successful password login from the same source.",
+      "evidence": [
+        "evt-demo-fail-001",
+        "evt-demo-fail-002",
+        "evt-demo-fail-003",
+        "evt-demo-fail-004",
+        "evt-demo-fail-005",
+        "evt-demo-fail-006",
+        "evt-demo-ok-001"
+      ]
+    },
+    {
+      "kind": "suspected",
+      "statement": "Success after failures may indicate password guessing that eventually worked, or a legitimate user mistyping then succeeding.",
+      "evidence": ["evt-demo-fail-006", "evt-demo-ok-001"]
+    },
+    {
+      "kind": "unknown",
+      "statement": "Auth logs cannot show post-login activity; compromise is not confirmed.",
+      "evidence": ["evt-demo-ok-001"]
+    }
+  ],
+  "recommendation": "Verify whether the demo login was authorized (demo scenario or real user). If unexpected, rotate the demo password and consider a temporary IP block pending human approval.",
+  "mitre": ["T1110.001", "T1078"],
+  "model": "grok-4-1-fast-non-reasoning",
+  "duration_ms": 2210,
+  "created_at": "2026-10-24T17:05:00.000Z"
+}
