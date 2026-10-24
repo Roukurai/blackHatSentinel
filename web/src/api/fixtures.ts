@@ -174,6 +174,16 @@ const incidents: Incident[] = [
     patterns: ["low_and_slow", "privileged_target"],
     severity: "low",
     status: "new",
+    action: {
+      id: "act-004",
+      kind: "block_ip",
+      target: ip4,
+      ttl_seconds: 600,
+      status: "rejected_by_policy",
+      policy_reason: "target in RESPONSE_ALLOWLIST",
+      applied_at: null,
+      expires_at: null,
+    },
     notification: { status: "pending", attempts: 0, last_attempt_at: null },
     investigation: {
       status: "failed",

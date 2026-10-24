@@ -4,6 +4,7 @@ import { useIncident } from "../api/queries";
 import type { IncidentDetail as Detail } from "../api/types";
 import { fmtDuration, fmtUtc, relAge, useNow } from "../lib/format";
 import { IncidentStatusDot, NotificationDot, OriginBadge, PatternBadge, SeverityBadge } from "./Badge";
+import { ActionSection } from "./ActionPanel";
 import { InvestigationSection } from "./InvestigationPanel";
 import { ErrorState, SkeletonRows } from "./StateView";
 import { Timeline } from "./Timeline";
@@ -165,6 +166,8 @@ function DetailView({ inc, stale }: { inc: Detail; stale: boolean }) {
       </section>
 
       <InvestigationSection incident={inc} loadedEventIds={loadedEventIds} onFocusEvent={focusEvent} />
+
+      <ActionSection incident={inc} />
 
       <section className="section" aria-label="Events">
         <header className="section-head">
