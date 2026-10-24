@@ -8,6 +8,7 @@ import type {
   Health,
   Incident,
   IncidentDetail,
+  LlmSettings,
   Origin,
   ResponseAction,
   SentinelEvent,
@@ -302,5 +303,106 @@ export const fixtureApi: Api = {
     if (!inc?.action) throw new ApiError("not_found", "Not found", 404);
     inc.status = "action_rejected";
     return delay(inc.action);
+  },
+
+  llmSettings: () =>
+    delay<LlmSettings>({
+      configured: true,
+      activeProvider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini",
+      keyLast4: "demo",
+      updatedAt: ago(3600),
+      source: "settings",
+      providers: [
+        {
+          id: "openai",
+          label: "OpenAI",
+          configured: true,
+          baseUrl: "https://api.openai.com/v1",
+          model: "gpt-4o-mini",
+          keyLast4: "demo",
+          keyPlaceholder: "sk-…",
+          modelPlaceholder: "gpt-4o-mini",
+          baseUrlPlaceholder: "https://api.openai.com/v1",
+          hint: "platform.openai.com/api-keys",
+        },
+        {
+          id: "anthropic",
+          label: "Anthropic",
+          configured: false,
+          baseUrl: "https://api.anthropic.com/v1",
+          model: "claude-sonnet-4-5",
+          keyLast4: null,
+          keyPlaceholder: "sk-ant-…",
+          modelPlaceholder: "claude-sonnet-4-5",
+          baseUrlPlaceholder: "https://api.anthropic.com/v1",
+          hint: "console.anthropic.com",
+        },
+        {
+          id: "gemini",
+          label: "Google Gemini",
+          configured: false,
+          baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+          model: "gemini-2.0-flash",
+          keyLast4: null,
+          keyPlaceholder: "AIza…",
+          modelPlaceholder: "gemini-2.0-flash",
+          baseUrlPlaceholder: "https://generativelanguage.googleapis.com/v1beta/openai",
+          hint: "aistudio.google.com",
+        },
+        {
+          id: "openrouter",
+          label: "OpenRouter",
+          configured: false,
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "openai/gpt-4o-mini",
+          keyLast4: null,
+          keyPlaceholder: "sk-or-…",
+          modelPlaceholder: "openai/gpt-4o-mini",
+          baseUrlPlaceholder: "https://openrouter.ai/api/v1",
+          hint: "openrouter.ai/keys",
+        },
+        {
+          id: "custom",
+          label: "Custom (OpenAI-compatible)",
+          configured: false,
+          baseUrl: "",
+          model: "",
+          keyLast4: null,
+          keyPlaceholder: "API key",
+          modelPlaceholder: "model-id",
+          baseUrlPlaceholder: "https://…/v1",
+          hint: "Any OpenAI-compatible endpoint",
+        },
+      ],
+    }),
+
+  saveLlmSettings: async (update) => {
+    const base = await fixtureApi.llmSettings();
+    const active = update.activeProvider ?? update.provider ?? base.activeProvider;
+    const target = update.provider ?? active;
+    const providers = base.providers.map((p) => {
+      if (p.id !== target) return p;
+      const key = update.apiKey?.trim();
+      return {
+        ...p,
+        baseUrl: update.baseUrl?.trim() || p.baseUrl,
+        model: update.model?.trim() || p.model,
+        keyLast4: key ? key.slice(-4) : p.keyLast4,
+        configured: Boolean((key || p.keyLast4) && (update.model?.trim() || p.model)),
+      };
+    });
+    const activeSlot = providers.find((p) => p.id === active) ?? providers[0]!;
+    return delay<LlmSettings>({
+      configured: activeSlot.configured,
+      activeProvider: active,
+      baseUrl: activeSlot.baseUrl,
+      model: activeSlot.model,
+      keyLast4: activeSlot.keyLast4,
+      updatedAt: new Date().toISOString(),
+      source: "settings",
+      providers,
+    });
   },
 };

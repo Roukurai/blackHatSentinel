@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./client";
+import type { LlmSettingsUpdate } from "./types";
 
 const POLL_MS = 2000;
 
@@ -12,6 +13,7 @@ export const keys = {
   health: ["health"] as const,
   incidents: ["incidents"] as const,
   incident: (id: string) => ["incident", id] as const,
+  llmSettings: ["llmSettings"] as const,
 };
 
 export function useHealth() {
@@ -66,5 +68,24 @@ export function useActionDecision(incidentId: string) {
     mutationFn: ({ actionId, decision }: { actionId: string; decision: "approve" | "reject" }) =>
       decision === "approve" ? api.approveAction(actionId) : api.rejectAction(actionId),
     onSettled: () => refresh(incidentId),
+  });
+}
+
+export function useLlmSettings() {
+  return useQuery({
+    queryKey: keys.llmSettings,
+    queryFn: ({ signal }) => api.llmSettings(signal),
+  });
+}
+
+export function useSaveLlmSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ["saveLlmSettings"],
+    mutationFn: (update: LlmSettingsUpdate) => api.saveLlmSettings(update),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.llmSettings, data);
+      void qc.invalidateQueries({ queryKey: keys.health });
+    },
   });
 }

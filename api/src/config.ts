@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { llmSettingsPathForDb } from "./llm-settings.ts";
 import type { Config } from "./types.ts";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -54,6 +55,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port,
     publicBaseUrl: pick(file, env, "PUBLIC_BASE_URL", `http://127.0.0.1:${port}`),
     dbPath,
+    llmSettingsPath: llmSettingsPathForDb(dbPath),
     dashboardUser: pick(file, env, "DASHBOARD_USER"),
     dashboardPass: pick(file, env, "DASHBOARD_PASS"),
     telegramToken: pick(file, env, "TELEGRAM_BOT_TOKEN"),

@@ -100,6 +100,8 @@ export interface Config {
   port: number;
   publicBaseUrl: string;
   dbPath: string;
+  /** Path to BYO LLM settings JSON (gitignored). */
+  llmSettingsPath: string;
   dashboardUser: string;
   dashboardPass: string;
   telegramToken: string;

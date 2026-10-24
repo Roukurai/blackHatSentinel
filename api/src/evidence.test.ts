@@ -11,6 +11,7 @@ const config: Config = {
   port: 0,
   publicBaseUrl: "http://127.0.0.1:8080",
   dbPath: ":memory:",
+  llmSettingsPath: "/tmp/sentinel-test-llm-settings.json",
   dashboardUser: "",
   dashboardPass: "",
   telegramToken: "",

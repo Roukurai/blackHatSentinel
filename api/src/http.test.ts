@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
+import { mkdtempSync, rmSync } from "node:fs";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { openDatabase } from "./db.ts";
 import { createServer } from "./server.ts";
@@ -13,6 +16,7 @@ function config(overrides: Partial<Config> = {}): Config {
     port: 0,
     publicBaseUrl: "http://127.0.0.1:8080",
     dbPath: ":memory:",
+    llmSettingsPath: "/tmp/sentinel-test-llm-settings.json",
     dashboardUser: "",
     dashboardPass: "",
     telegramToken: "test-token",
@@ -121,6 +125,47 @@ test("localhost ingest creates an incident and serves it", async () => {
   server.close();
   await once(server, "close");
   db.close();
+});
+
+test("PUT /settings/llm stores key without echoing it", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "sentinel-http-llm-"));
+  const settingsPath = path.join(dir, "llm-settings.json");
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config({ llmSettingsPath: settingsPath }),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
+
+  const put = await fetch(`${base}/settings/llm`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      apiKey: "sk-live-secret-key-9999",
+      model: "gpt-4o-mini",
+      baseUrl: "https://api.openai.com/v1",
+    }),
+  });
+  assert.equal(put.status, 200);
+  const body = await put.json() as { configured: boolean; keyLast4: string; model: string };
+  assert.equal(body.configured, true);
+  assert.equal(body.keyLast4, "9999");
+  assert.equal(body.model, "gpt-4o-mini");
+  assert.ok(!JSON.stringify(body).includes("sk-live-secret-key-9999"));
+
+  const get = await fetch(`${base}/settings/llm`);
+  assert.equal(get.status, 200);
+  const got = await get.json() as { keyLast4: string };
+  assert.equal(got.keyLast4, "9999");
+
+  server.close();
+  await once(server, "close");
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test("dashboard routes require basic auth when credentials are set", async () => {
