@@ -19,6 +19,26 @@
     }
   ],
   "recommendation": "Monitor source 192.0.2.50; consider temporary block if volume continues. No success login to investigate further from SSH auth alone.",
+  "root_cause": {
+    "kind": "suspected",
+    "statement": "Automated SSH scanning or brute-force attempts from 192.0.2.50.",
+    "evidence": ["evt-burst-001", "evt-burst-002", "evt-burst-003", "evt-burst-004", "evt-burst-005"]
+  },
+  "remediation": [
+    {
+      "order": 1,
+      "text": "Confirm fail2ban/nft rate limits or similar controls cover SSH.",
+      "urgency": "medium",
+      "mode": "manual"
+    },
+    {
+      "order": 2,
+      "text": "Propose a temporary IP block for 192.0.2.50 (human approval required).",
+      "urgency": "high",
+      "mode": "automatable",
+      "action": { "kind": "block_ip", "target": "192.0.2.50" }
+    }
+  ],
   "mitre": ["T1110.001", "T1110.003"],
   "model": "gpt-4o-mini",
   "duration_ms": 1840,

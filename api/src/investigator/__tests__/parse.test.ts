@@ -15,4 +15,12 @@ describe("parse", () => {
   it("extractJsonObject throws on garbage", () => {
     expect(() => extractJsonObject("nope")).toThrow(LlmFailedError);
   });
+
+  it("parses legacy JSON without root_cause or remediation", () => {
+    const out = parseModelOutput(
+      '{"summary":"s","findings":[],"recommendation":"r","mitre":[]}',
+    );
+    expect(out.root_cause).toBeUndefined();
+    expect(out.remediation).toBeUndefined();
+  });
 });

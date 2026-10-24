@@ -1,9 +1,16 @@
-import { fallbackSummary } from "./fallback.ts";
+import {
+  fallbackRemediation,
+  fallbackRootCause,
+  fallbackSummary,
+} from "./fallback.ts";
 import type {
   Finding,
   Incident,
   ModelOutput,
+  RemediationStep,
+  RootCause,
   SentinelEvent,
+  Severity,
 } from "./types.ts";
 import { MITRE_ALLOWLIST } from "./types.ts";
 
@@ -15,8 +22,124 @@ export interface ValidateResult {
   summary: string;
   findings: Finding[];
   recommendation: string;
+  root_cause: RootCause;
+  remediation: RemediationStep[];
   mitre: string[];
   rejected_findings: number;
+}
+
+function sanitizeRootCause(
+  raw: RootCause | undefined,
+  incident: Incident,
+  seenEventIds: Set<string>,
+): { root_cause: RootCause; limited: boolean } {
+  if (!raw) {
+    return { root_cause: fallbackRootCause(incident), limited: false };
+  }
+
+  const evidence = [...new Set(raw.evidence.filter(Boolean))];
+  const allKnown = evidence.every((id) => seenEventIds.has(id));
+  let limited = false;
+
+  if (!allKnown) {
+    limited = true;
+    return {
+      root_cause: {
+        kind: "unknown",
+        statement: "Root cause not determinable from cited evidence.",
+        evidence: [],
+      },
+      limited,
+    };
+  }
+
+  if (
+    (raw.kind === "observed" || raw.kind === "suspected") &&
+    evidence.length === 0
+  ) {
+    limited = true;
+    return {
+      root_cause: {
+        kind: "unknown",
+        statement: "Root cause not determinable from cited evidence.",
+        evidence: [],
+      },
+      limited,
+    };
+  }
+
+  if (
+    raw.kind === "observed" &&
+    COMPROMISE_RE.test(raw.statement) &&
+    !HEDGED_RE.test(raw.statement)
+  ) {
+    limited = true;
+    return {
+      root_cause: {
+        kind: "unknown",
+        statement: "Root cause not determinable from cited evidence.",
+        evidence: [],
+      },
+      limited,
+    };
+  }
+
+  return {
+    root_cause: {
+      kind: raw.kind,
+      statement: raw.statement.slice(0, 300),
+      evidence,
+    },
+    limited: raw.kind === "unknown",
+  };
+}
+
+function sanitizeRemediation(
+  raw: RemediationStep[] | undefined,
+  incident: Incident,
+  limited: boolean,
+): RemediationStep[] {
+  if (limited) {
+    return fallbackRemediation(incident, { verificationOnly: true });
+  }
+
+  const sourceIp = incident.source_ip;
+  const out: RemediationStep[] = [];
+
+  for (const step of (raw ?? []).slice(0, 5)) {
+    const urgency: Severity =
+      step.urgency === "low" || step.urgency === "high" || step.urgency === "medium"
+        ? step.urgency
+        : "medium";
+    let mode = step.mode === "automatable" ? "automatable" : "manual";
+    let action = step.action;
+
+    if (
+      mode === "automatable" &&
+      action &&
+      action.kind === "block_ip" &&
+      sourceIp &&
+      action.target === sourceIp
+    ) {
+      action = { kind: "block_ip", target: sourceIp };
+    } else {
+      mode = "manual";
+      action = undefined;
+    }
+
+    out.push({
+      order: out.length + 1,
+      text: step.text.slice(0, 200),
+      urgency,
+      mode,
+      ...(action ? { action } : {}),
+    });
+  }
+
+  if (out.length === 0) {
+    return fallbackRemediation(incident);
+  }
+  return out;
 }
 
 export function validateModelOutput(
@@ -83,6 +206,17 @@ export function validateModelOutput(
     summary = fallbackSummary(incident);
   }
 
+  const { root_cause, limited } = sanitizeRootCause(
+    output.root_cause,
+    incident,
+    seenEventIds,
+  );
+  const remediation = sanitizeRemediation(
+    output.remediation,
+    incident,
+    limited,
+  );
+
   const mitre = [
     ...new Set(
       output.mitre.filter(
@@ -95,6 +229,8 @@ export function validateModelOutput(
     summary,
     findings: findings.slice(0, 8),
     recommendation: output.recommendation.slice(0, 400),
+    root_cause,
+    remediation,
     mitre,
     rejected_findings: rejected,
   };

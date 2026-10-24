@@ -27,6 +27,32 @@
     }
   ],
   "recommendation": "Verify whether the demo login was authorized (demo scenario or real user). If unexpected, rotate the demo password and consider a temporary IP block pending human approval.",
+  "root_cause": {
+    "kind": "suspected",
+    "statement": "Credential guessing may have succeeded after prior failures; compromise is not confirmed from auth logs alone.",
+    "evidence": ["evt-demo-fail-006", "evt-demo-ok-001"]
+  },
+  "remediation": [
+    {
+      "order": 1,
+      "text": "Rotate the demo password if this login was unexpected.",
+      "urgency": "high",
+      "mode": "manual"
+    },
+    {
+      "order": 2,
+      "text": "Review sshd Match User password-auth exceptions.",
+      "urgency": "high",
+      "mode": "manual"
+    },
+    {
+      "order": 3,
+      "text": "Propose a temporary IP block for 203.0.113.77 (human approval required).",
+      "urgency": "high",
+      "mode": "automatable",
+      "action": { "kind": "block_ip", "target": "203.0.113.77" }
+    }
+  ],
   "mitre": ["T1110.001", "T1078"],
   "model": "gpt-4o-mini",
   "duration_ms": 2210,

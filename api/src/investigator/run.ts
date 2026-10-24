@@ -1,4 +1,8 @@
-import { fallbackSummary } from "./fallback.ts";
+import {
+  fallbackRemediation,
+  fallbackRootCause,
+  fallbackSummary,
+} from "./fallback.ts";
 import {
   chat,
   LlmFailedError,
@@ -38,7 +42,17 @@ function nonOk(
     status,
     summary,
     findings: [],
-    recommendation: "",
+    recommendation: incident
+      ? "Review cited patterns manually; AI was unavailable."
+      : "",
+    root_cause: incident
+      ? fallbackRootCause(incident)
+      : {
+          kind: "unknown",
+          statement: "Incident not found; root cause unavailable.",
+          evidence: [],
+        },
+    remediation: incident ? fallbackRemediation(incident) : [],
     mitre: [],
     model,
     duration_ms,
@@ -148,6 +162,8 @@ export async function runInvestigation(
           summary: validated.summary,
           findings: validated.findings,
           recommendation: validated.recommendation,
+          root_cause: validated.root_cause,
+          remediation: validated.remediation,
           mitre: validated.mitre,
           model: modelLabel,
           duration_ms: Math.round(performance.now() - t0),
@@ -194,6 +210,8 @@ export async function runInvestigation(
       summary: validated.summary,
       findings: validated.findings,
       recommendation: validated.recommendation,
+      root_cause: validated.root_cause,
+      remediation: validated.remediation,
       mitre: validated.mitre,
       model: modelLabel,
       duration_ms: Math.round(performance.now() - t0),

@@ -32,13 +32,22 @@ describe.runIf(live)("live LLM smoke", () => {
         r.summary.slice(0, 120),
       );
       expect(r.status).toBe("ok");
+      expect(r.root_cause).toBeTruthy();
+      expect(r.remediation?.length).toBeGreaterThan(0);
       const known = new Set(demoEvents.map((e) => e.event_id));
+      for (const id of r.root_cause!.evidence) expect(known.has(id)).toBe(true);
       for (const f of r.findings) {
         for (const id of f.evidence) expect(known.has(id)).toBe(true);
         if (f.kind === "observed") {
           expect(f.statement).not.toMatch(
             /compromis|breach|gained access|intrusion confirmed/i,
           );
+        }
+      }
+      for (const step of r.remediation ?? []) {
+        if (step.action) {
+          expect(step.action.kind).toBe("block_ip");
+          expect(step.action.target).toBe(demoIncident.source_ip);
         }
       }
     },

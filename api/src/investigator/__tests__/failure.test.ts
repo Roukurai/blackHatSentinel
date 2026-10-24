@@ -26,6 +26,9 @@ describe("investigate failure modes", () => {
     expect(r.model).toBe("none");
     expect(fetchFn).not.toHaveBeenCalled();
     expect(r.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(r.root_cause?.kind).toBeTruthy();
+    expect(r.remediation?.length).toBeGreaterThan(0);
+    expect(r.remediation?.every((s) => typeof s.text === "string")).toBe(true);
   });
 
   it("returns unavailable when fetch throws", async () => {

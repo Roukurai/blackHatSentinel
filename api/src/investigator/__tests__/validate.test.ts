@@ -115,4 +115,100 @@ describe("validateModelOutput", () => {
       ),
     ).toBe(true);
   });
+
+  it("forces unknown root_cause when evidence ids are invented", () => {
+    const r = validateModelOutput(
+      {
+        summary: "ok",
+        findings: [],
+        recommendation: "",
+        root_cause: {
+          kind: "suspected",
+          statement: "guess",
+          evidence: ["invented-id"],
+        },
+        remediation: [
+          {
+            order: 1,
+            text: "block them",
+            urgency: "high",
+            mode: "automatable",
+            action: { kind: "block_ip", target: demoIncident.source_ip! },
+          },
+        ],
+        mitre: [],
+      },
+      demoIncident,
+      seen,
+      demoEvents,
+    );
+    expect(r.root_cause.kind).toBe("unknown");
+    expect(r.remediation.every((s) => s.mode === "manual")).toBe(true);
+  });
+
+  it("strips automatable action when target is not incident source_ip", () => {
+    const r = validateModelOutput(
+      {
+        summary: "ok",
+        findings: [],
+        recommendation: "",
+        root_cause: {
+          kind: "suspected",
+          statement: "scanning",
+          evidence: ["evt-demo-fail-001"],
+        },
+        remediation: [
+          {
+            order: 1,
+            text: "block other",
+            urgency: "high",
+            mode: "automatable",
+            action: { kind: "block_ip", target: "198.51.100.1" },
+          },
+        ],
+        mitre: [],
+      },
+      demoIncident,
+      seen,
+      demoEvents,
+    );
+    expect(r.remediation[0]?.mode).toBe("manual");
+    expect(r.remediation[0]?.action).toBeUndefined();
+  });
+
+  it("rejects observed compromised root_cause wording", () => {
+    const r = validateModelOutput(
+      {
+        summary: "ok",
+        findings: [],
+        recommendation: "",
+        root_cause: {
+          kind: "observed",
+          statement: "Host is compromised",
+          evidence: ["evt-demo-ok-001"],
+        },
+        mitre: [],
+      },
+      demoIncident,
+      seen,
+      demoEvents,
+    );
+    expect(r.root_cause.kind).toBe("unknown");
+  });
+
+  it("fills root_cause and remediation from fallback when omitted", () => {
+    const r = validateModelOutput(
+      {
+        summary: "ok",
+        findings: [],
+        recommendation: "",
+        mitre: [],
+      },
+      demoIncident,
+      seen,
+      demoEvents,
+    );
+    expect(r.root_cause.kind).toBeTruthy();
+    expect(r.remediation.length).toBeGreaterThan(0);
+  });
 });

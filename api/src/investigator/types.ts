@@ -40,11 +40,29 @@ export interface Finding {
   evidence: string[];
 }
 
+export interface RootCause {
+  kind: "observed" | "suspected" | "unknown";
+  statement: string;
+  evidence: string[];
+}
+
+export interface RemediationStep {
+  order: number;
+  text: string;
+  urgency: Severity;
+  mode: "manual" | "automatable";
+  /** Only block_ip; target must equal incident.source_ip after validation. */
+  action?: { kind: "block_ip"; target: string };
+}
+
 export interface Investigation {
   status: "ok" | "unavailable" | "failed";
   summary: string;
   findings: Finding[];
   recommendation: string;
+  /** Present on new reports; optional for older investigation_json rows. */
+  root_cause?: RootCause;
+  remediation?: RemediationStep[];
   mitre: string[];
   model: string;
   duration_ms: number;
@@ -111,6 +129,8 @@ export interface ModelOutput {
   summary: string;
   findings: Finding[];
   recommendation: string;
+  root_cause?: RootCause;
+  remediation?: RemediationStep[];
   mitre: string[];
 }
 

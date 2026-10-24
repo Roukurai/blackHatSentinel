@@ -18,6 +18,8 @@ export {
 } from "./wire.ts";
 export type {
   Finding,
+  RootCause,
+  RemediationStep,
   Investigation,
   Investigator,
   InvestigatorDeps,
