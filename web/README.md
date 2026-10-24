@@ -4,9 +4,16 @@ Operator workspace for Sentinel: incident list, incident investigation (timeline
 AI findings, Telegram delivery status) and pipeline health. Polls the API every 2 s.
 Built output is served by `api/`.
 
-Stack: Vite, React 19, strict TypeScript, react-router, TanStack Query. Styling follows the
-Geist (Vercel Design System) patterns and tokens, with Geist Sans / Geist Mono bundled locally
-(no external font requests). No component library.
+Stack: Vite, React 19, strict TypeScript, react-router, TanStack Query. No component library.
+
+Design: Geist (Vercel Design System) layout and component patterns, with the Sentinell brand
+identity from the landing page: warm dark palette (`#141210` / cream `#ece7dc`), signal red-orange
+accent, phosphor and amber, the shield mark, grid/glow background. Tokens live in
+`src/styles/tokens.css` (`--brand-*` primitives mapped onto the `--ds-*` names the layout uses).
+
+Fonts: JetBrains Mono (OFL) is bundled. Sentient is loaded from the Fontshare API because its
+license (ITF FFL) does not allow redistributing the font files from a public repository; offline
+it falls back to a local serif, and nothing depends on it.
 
 ## Run
 

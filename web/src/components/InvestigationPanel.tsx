@@ -4,7 +4,7 @@ import { fmtUtc, shortId } from "../lib/format";
 import { GBadge, Note, Spinner, type Tone } from "./ui";
 
 const GROUPS: { kind: FindingKind; title: string; hint: string; tone: Tone }[] = [
-  { kind: "observed", title: "Observed", hint: "Directly shown by the cited events", tone: "blue" },
+  { kind: "observed", title: "Observed", hint: "Directly shown by the cited events", tone: "green" },
   { kind: "suspected", title: "Suspected", hint: "Inferred; not proven by the logs", tone: "amber" },
   { kind: "unknown", title: "Unknown", hint: "Cannot be determined from available evidence", tone: "gray" },
 ];

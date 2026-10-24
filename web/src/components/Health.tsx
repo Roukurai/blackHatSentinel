@@ -98,7 +98,7 @@ export function HealthPage() {
       <header className="page-head">
         <div>
           <h1 className="h-page">Health</h1>
-          <p className="sub">Status of the Sentinel pipeline on this host.</p>
+          <p className="sub">Status of the Sentinell pipeline on this host.</p>
         </div>
       </header>
       {isError && data && (
