@@ -50,11 +50,18 @@ function markDelivered(db: DatabaseSync, incidentId: string, kind: string, chatI
   ).run(incidentId, kind, chatId);
 }
 
-function rememberChat(db: DatabaseSync, chatId: string): void {
+function rememberChat(db: DatabaseSync, chatId: string): boolean {
+  const existing = db.prepare("SELECT 1 AS ok FROM telegram_recipients WHERE chat_id = ?").get(chatId);
   db.prepare("INSERT OR IGNORE INTO telegram_recipients (chat_id, added_at) VALUES (?, ?)").run(
     chatId,
     new Date().toISOString(),
   );
+  return !existing;
+}
+
+function alertChatIds(db: DatabaseSync, config: Config): string[] {
+  const saved = db.prepare("SELECT chat_id FROM telegram_recipients").all() as Array<{ chat_id: string }>;
+  return [...new Set([...configuredChatIds(config), ...saved.map((row) => row.chat_id)])];
 }
 
 function privateChat(update: {
@@ -91,8 +98,19 @@ async function syncLinkedChats(db: DatabaseSync, token: string): Promise<void> {
     next = Math.max(next, update.update_id + 1);
     const chat = privateChat(update);
     if (!chat) continue;
-    rememberChat(db, chat.id);
+    const isNew = rememberChat(db, chat.id);
     tryBindTelegram(db, chat.text, chat.id);
+    if (!isNew) continue;
+    try {
+      await deliverTelegram(
+        { telegramToken: token, telegramChatId: chat.id } as Config,
+        chat.id,
+        "Sentinel\nThis device is registered. Alerts for this host will arrive here.",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "telegram failed";
+      console.error(`telegram register failed for ${chat.id}: ${message}`);
+    }
   }
   if (next === offset) return;
   db.prepare(`
@@ -174,7 +192,7 @@ export async function flushNotifications(
       console.error(`telegram link sync failed: ${message}`);
     }
   }
-  const chats = configuredChatIds(config);
+  const chats = alertChatIds(db, config);
   const due = listDueIncidents(db, new Date().toISOString());
   const notified: string[] = [];
   for (const incident of due) {
