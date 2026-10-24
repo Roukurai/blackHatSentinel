@@ -96,7 +96,7 @@ curl -sS -X POST http://127.0.0.1:8080/mcp \
 
 ```text
 Set up Sentinell (SSH attack triage) on this Linux server.
-1. Install: curl -fsSL https://sentinell.xyz/install.sh | sh
+1. Install: curl -fsSL https://sentinell.xyz/install.sh | bash
 2. Copy .env.example → .env; set HOST_ID, Telegram, and optionally LLM_* (or use dashboard Settings for BYO OpenAI key). Never print secrets back to me.
 3. Start the API (and collector): see ops/README.md / install output.
 4. Connect yourself to Sentinell's read-only MCP:

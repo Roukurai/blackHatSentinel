@@ -2,7 +2,7 @@
 # Minimal Sentinell install for one Ubuntu host (hackathon / self-host).
 # Served at https://sentinell.xyz/install.sh
 #
-#   curl -fsSL https://sentinell.xyz/install.sh | sh
+#   curl -fsSL https://sentinell.xyz/install.sh | bash
 #   # or from a clone:
 #   bash ops/install.sh
 #

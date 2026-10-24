@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Public entrypoint for https://sentinell.xyz/install.sh
-# Works when piped (curl | sh) or run from a clone.
+# Works when piped (curl | bash) or run from a clone. Needs bash: plain sh (dash) fails.
 set -euo pipefail
 
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" && -f "$(dirname "${BASH_SOURCE[0]}")/ops/install.sh" ]]; then
