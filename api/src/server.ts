@@ -22,6 +22,8 @@ import type { Config, Incident, SentinelEvent } from "./types.ts";
 import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
 import { serveWeb } from "./web.ts";
+import { handleMcpHttp, sendMcpHttpResult } from "./mcp/http.ts";
+import { ensureMcpTokensTable } from "./mcp/tokens.ts";
 
 export interface ServerOptions {
   config: Config;
@@ -98,6 +100,15 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     const result = ingest(db, body, config);
     await flushAndFollowUp(db, config, investigator, options.send);
     sendJson(res, 200, result);
+    return;
+  }
+
+  // Remote MCP: Bearer token only (not dashboard Basic auth). Before auth gate.
+  if (path === "/mcp") {
+    if (req.method !== "POST") throw new HttpError(405, "method not allowed");
+    const text = await readBody(req);
+    const result = await handleMcpHttp(req, text, db, config);
+    sendMcpHttpResult(res, result);
     return;
   }
 
@@ -224,6 +235,7 @@ function withResponse(db: DatabaseSync, incident: Incident, events: SentinelEven
 
 export function createServer(options: ServerOptions): Server {
   ensureActionsTable(options.db);
+  ensureMcpTokensTable(options.db);
   const investigator =
     options.investigator ??
     createApiInvestigator(options.db, options.config.llmSettingsPath);

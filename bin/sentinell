@@ -10,9 +10,15 @@ usage() {
 sentinell — SSH attack triage helpers
 
 Usage:
-  sentinell mcp       Start read-only MCP server (stdio)
-  sentinell status    Print API /health if reachable
+  sentinell mcp                         Start read-only MCP server (stdio)
+  sentinell mcp token create --name N   Generate remote MCP Bearer token (printed once)
+  sentinell mcp token list              List token metadata (no secrets)
+  sentinell mcp token revoke <id>       Revoke a token
+  sentinell status                      Print API /health if reachable
   sentinell help
+
+Remote MCP (after create): POST https://<host>/mcp with Authorization: Bearer <token>
+See docs/MCP.md. Prefer TLS in front of the API.
 
 Install PATH tip (after ops/install.sh):
   export PATH="$HOME/.local/bin:$PATH"
@@ -22,6 +28,11 @@ EOF
 case "$CMD" in
   mcp)
     shift || true
+    SUB="${1:-}"
+    if [[ "$SUB" == "token" ]]; then
+      shift || true
+      exec node --experimental-strip-types "$ROOT/api/src/mcp/token-cli.ts" "$@"
+    fi
     exec node --experimental-strip-types "$ROOT/api/src/mcp/server.ts" "$@"
     ;;
   status)
