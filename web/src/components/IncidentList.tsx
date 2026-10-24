@@ -5,6 +5,7 @@ import { useIncidents } from "../api/queries";
 import { fmtUtc, relAge, useNow } from "../lib/format";
 import { IncidentStatusDot, OriginBadge, PatternBadge, SeverityBadge } from "./Badge";
 import { ErrorState, SkeletonRows } from "./StateView";
+import { useSetupProgress } from "./Setup";
 import { EmptyState, Note } from "./ui";
 
 type SevFilter = "all" | Severity;
@@ -14,6 +15,7 @@ export function IncidentsPage() {
   const now = useNow();
   const [query, setQuery] = useState("");
   const [sev, setSev] = useState<SevFilter>("all");
+  const setup = useSetupProgress();
 
   // Contract says newest first; sort defensively so ordering never depends on it.
   const sorted = useMemo(() => (data ? [...data].sort((a, b) => b.last_seen.localeCompare(a.last_seen)) : undefined), [data]);
@@ -30,6 +32,15 @@ export function IncidentsPage() {
           <p className="sub">Correlated SSH authentication activity on this host, newest first.</p>
         </div>
       </header>
+
+      {setup && !setup.complete && (
+        <Link to="/setup" className="setup-nudge">
+          <span>
+            <strong>Finish setting up Sentinell</strong> · {setup.done} of {setup.total} steps done
+          </span>
+          <span className="setup-nudge__cta">Continue setup →</span>
+        </Link>
+      )}
 
       <div className="filters">
         <div className="g-input">
