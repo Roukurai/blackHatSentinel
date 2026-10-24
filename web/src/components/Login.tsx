@@ -13,7 +13,8 @@ export function AuthBoot() {
   );
 }
 
-export function SetupPassword({ onSuccess }: { onSuccess: () => Promise<unknown> }) {
+export function SetupPassword({ tokenPath, onSuccess }: { tokenPath?: string; onSuccess: () => Promise<unknown> }) {
+  const [setupToken, setSetupToken] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -29,7 +30,8 @@ export function SetupPassword({ onSuccess }: { onSuccess: () => Promise<unknown>
     }
     setBusy(true);
     try {
-      await setupAccount(username.trim(), password);
+      await setupAccount(username.trim(), password, setupToken.trim());
+      setSetupToken("");
       setPassword("");
       setConfirm("");
       setBusy(false);
@@ -50,9 +52,28 @@ export function SetupPassword({ onSuccess }: { onSuccess: () => Promise<unknown>
         </div>
         <form className="login__form" onSubmit={(e) => void onSubmit(e)}>
           <label className="login__field">
+            <span>Setup token</span>
+            <span className="g-input">
+              <input
+                name="setup_token"
+                className="mono"
+                autoComplete="off"
+                spellCheck={false}
+                autoFocus
+                required
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
+              />
+            </span>
+            <span className="login__hint">
+              Proves you control this server. On the server, run <code className="mono">sudo cat {tokenPath ?? "<data dir>/setup-token"}</code> and
+              paste the result. It works once and is deleted after setup.
+            </span>
+          </label>
+          <label className="login__field">
             <span>Username</span>
             <span className="g-input">
-              <input name="username" autoComplete="username" autoFocus required value={username} onChange={(e) => setUsername(e.target.value)} />
+              <input name="username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} />
             </span>
           </label>
           <label className="login__field">
