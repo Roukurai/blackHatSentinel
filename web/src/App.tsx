@@ -1,40 +1,65 @@
-import { useCallback, useState } from "react";
-import { NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Navigate, NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { useHealth, useIncidents } from "./api/queries";
 import { CommandPalette, MOD_KEY, useCommandPaletteHotkey } from "./components/CommandPalette";
 import { FixtureBanner } from "./components/FixtureBanner";
 import { HealthIndicator, HealthPage } from "./components/Health";
 import { IncidentPage } from "./components/IncidentDetail";
 import { IncidentsPage } from "./components/IncidentList";
-import { SettingsPage } from "./components/Settings";
+import { AiSettingsPage, HostSettingsPage, NotificationsSettingsPage, ResponseSettingsPage } from "./components/Settings";
+import { SetupPage } from "./components/Setup";
+import { Sidebar } from "./components/Sidebar";
 import { EmptyState } from "./components/ui";
+import { isNarrowViewport, useCollapsedSidebar, useModHotkey } from "./lib/hotkeys";
 
 export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useCollapsedSidebar();
   const togglePalette = useCallback(() => setPaletteOpen((o) => !o), []);
   useCommandPaletteHotkey(togglePalette);
+
+  // Cmd/Ctrl+B: collapse/expand the sidebar on desktop, open/close the drawer on small screens.
+  const toggleSidebar = useCallback(() => {
+    if (isNarrowViewport()) setNavOpen((o) => !o);
+    else setCollapsed(!collapsed);
+  }, [collapsed, setCollapsed]);
+  useModHotkey("b", toggleSidebar);
+
+  // Close the mobile drawer whenever the route changes.
+  const { pathname } = useLocation();
+  useEffect(() => setNavOpen(false), [pathname]);
 
   return (
     <div className="shell">
       <FixtureBanner />
-      <Header onOpenPalette={() => setPaletteOpen(true)} />
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
-      <main className="main">
-        <Routes>
-          <Route path="/" element={<IncidentsPage />} />
-          <Route path="/incidents/:id" element={<IncidentRoute />} />
-          <Route path="/health" element={<HealthPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route
-            path="*"
-            element={
-              <div className="page">
-                <EmptyState title="Page not found" />
-              </div>
-            }
-          />
-        </Routes>
-      </main>
+      <Header onOpenPalette={() => setPaletteOpen(true)} navOpen={navOpen} onToggleNav={() => setNavOpen((o) => !o)} />
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onToggleSidebar={toggleSidebar} />}
+      <div className={`layout${navOpen ? " layout--nav-open" : ""}${collapsed ? " layout--collapsed" : ""}`}>
+        <Sidebar collapsed={collapsed} onToggleCollapsed={toggleSidebar} />
+        {navOpen && <button type="button" className="layout__scrim" aria-label="Close menu" onClick={() => setNavOpen(false)} />}
+        <main className="main">
+          <Routes>
+            <Route path="/" element={<IncidentsPage />} />
+            <Route path="/incidents/:id" element={<IncidentRoute />} />
+            <Route path="/health" element={<HealthPage />} />
+            <Route path="/setup" element={<SetupPage />} />
+            <Route path="/settings" element={<Navigate to="/settings/ai" replace />} />
+            <Route path="/settings/ai" element={<AiSettingsPage />} />
+            <Route path="/settings/notifications" element={<NotificationsSettingsPage />} />
+            <Route path="/settings/response" element={<ResponseSettingsPage />} />
+            <Route path="/settings/host" element={<HostSettingsPage />} />
+            <Route
+              path="*"
+              element={
+                <div className="page">
+                  <EmptyState title="Page not found" />
+                </div>
+              }
+            />
+          </Routes>
+        </main>
+      </div>
     </div>
   );
 }
@@ -54,16 +79,25 @@ function Logo() {
   );
 }
 
-function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
+function Header({ onOpenPalette, navOpen, onToggleNav }: { onOpenPalette: () => void; navOpen: boolean; onToggleNav: () => void }) {
   const health = useHealth();
   const incidents = useIncidents();
   const host = health.data?.host_id ?? incidents.data?.[0]?.host_id;
-  const { pathname } = useLocation();
-  const onIncidents = pathname === "/" || pathname.startsWith("/incidents");
 
   return (
     <header className="header">
       <div className="header__top">
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-label={navOpen ? "Close menu" : "Open menu"}
+          aria-expanded={navOpen}
+          aria-controls="sidebar"
+          onClick={onToggleNav}
+        >
+          <span />
+          <span />
+        </button>
         <NavLink to="/" className="brand" aria-label="Sentinell home">
           <Logo />
           <span>Sentinell</span>
@@ -88,17 +122,6 @@ function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
         </button>
         <HealthIndicator />
       </div>
-      <nav className="tabs" aria-label="Sections">
-        <NavLink to="/" className={() => `tab${onIncidents ? " tab--active" : ""}`}>
-          Incidents
-        </NavLink>
-        <NavLink to="/health" className={({ isActive }) => `tab${isActive ? " tab--active" : ""}`}>
-          Health
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => `tab${isActive ? " tab--active" : ""}`}>
-          Settings
-        </NavLink>
-      </nav>
     </header>
   );
 }

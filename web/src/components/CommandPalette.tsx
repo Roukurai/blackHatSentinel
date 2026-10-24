@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MOD_KEY, useModHotkey } from "../lib/hotkeys";
 import { useNavigate } from "react-router-dom";
 import { useIncidents } from "../api/queries";
 import type { Incident } from "../api/types";
@@ -9,27 +10,25 @@ import { patternLabel, relAge, SEVERITY_LABELS, STATUS_LABELS, useNow } from "..
 
 interface Item {
   id: string;
-  group: "Go to" | "Incidents";
+  group: "Go to" | "Actions" | "Incidents";
   label: string;
   hint?: string;
   mono?: boolean;
   keywords: string;
-  to: string;
+  to?: string;
+  run?: () => void;
 }
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-export const MOD_KEY = IS_MAC ? "⌘" : "Ctrl";
+export { MOD_KEY };
 
 const PAGES: Item[] = [
   { id: "nav-incidents", group: "Go to", label: "Incidents", keywords: "incidents list home", to: "/" },
   { id: "nav-health", group: "Go to", label: "Health", keywords: "health status system collector telegram ai database", to: "/health" },
-  {
-    id: "nav-settings",
-    group: "Go to",
-    label: "Settings",
-    keywords: "settings llm openai api key byo model",
-    to: "/settings",
-  },
+  { id: "nav-setup", group: "Go to", label: "Setup", keywords: "setup onboarding install steps getting started", to: "/setup" },
+  { id: "nav-ai", group: "Go to", label: "AI provider", keywords: "settings llm openai anthropic gemini openrouter api key byok model", to: "/settings/ai" },
+  { id: "nav-notifications", group: "Go to", label: "Notifications", keywords: "settings telegram alerts bot", to: "/settings/notifications" },
+  { id: "nav-response", group: "Go to", label: "Response", keywords: "settings block runner allowlist nftables", to: "/settings/response" },
+  { id: "nav-host", group: "Go to", label: "Host & access", keywords: "settings host password auth detection thresholds", to: "/settings/host" },
 ];
 
 function incidentItem(inc: Incident, now: number): Item {
@@ -58,19 +57,10 @@ function matches(item: Item, query: string): boolean {
 }
 
 export function useCommandPaletteHotkey(onToggle: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        onToggle();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onToggle]);
+  useModHotkey("k", onToggle);
 }
 
-export function CommandPalette({ onClose }: { onClose: () => void }) {
+export function CommandPalette({ onClose, onToggleSidebar }: { onClose: () => void; onToggleSidebar: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const navigate = useNavigate();
@@ -87,8 +77,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const items = useMemo(() => {
     const incidents = [...(data ?? [])].sort((a, b) => b.last_seen.localeCompare(a.last_seen)).map((i) => incidentItem(i, now));
-    return [...PAGES, ...incidents].filter((i) => matches(i, query));
-  }, [data, now, query]);
+    const actions: Item[] = [
+      { id: "act-sidebar", group: "Actions", label: "Toggle sidebar", hint: `${MOD_KEY} B`, keywords: "sidebar collapse expand menu navigation", run: onToggleSidebar },
+    ];
+    return [...PAGES, ...actions, ...incidents].filter((i) => matches(i, query));
+  }, [data, now, query, onToggleSidebar]);
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
@@ -98,7 +91,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const choose = (item: Item | undefined) => {
     if (!item) return;
     onClose();
-    navigate(item.to);
+    if (item.run) item.run();
+    else if (item.to) navigate(item.to);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
