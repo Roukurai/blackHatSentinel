@@ -66,5 +66,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       slowWindowMs: integer(pick(file, env, "DETECT_SLOW_WINDOW_SECONDS", "1800"), 1800) * 1000,
     },
     llmBaseUrl: pick(file, env, "LLM_BASE_URL"),
+    hostId: pick(file, env, "HOST_ID", "ubuntu-01"),
+    webDist: path.resolve(repoRoot, pick(file, env, "WEB_DIST", "web/dist")),
+    response: {
+      allowlist: pick(file, env, "RESPONSE_ALLOWLIST")
+        .split(",")
+        .map((cidr) => cidr.trim())
+        .filter(Boolean),
+      ttlSeconds: integer(pick(file, env, "RESPONSE_BLOCK_TTL_SECONDS", "600"), 600),
+      runner: pick(file, env, "RESPONSE_RUNNER"),
+      runnerSudo: pick(file, env, "RESPONSE_RUNNER_SUDO") === "1",
+    },
   };
 }
