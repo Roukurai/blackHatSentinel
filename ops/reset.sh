@@ -9,4 +9,5 @@ echo "[*] removing db: $DB"
 rm -f "$DB" "$DB-wal" "$DB-shm"
 echo "[*] flushing nft block set (if present)"
 sudo nft flush set inet sentinel blocklist 2>/dev/null || true
+sudo nft flush set inet sentinel blocklist6 2>/dev/null || true
 echo "[*] reset done. Restart api + collector."
