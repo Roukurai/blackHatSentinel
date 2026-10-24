@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { Incident } from "../api/types";
 import { useIncidents } from "../api/queries";
@@ -8,6 +9,8 @@ import { ErrorState, SkeletonRows, StateView } from "./StateView";
 export function IncidentList({ selectedId }: { selectedId: string | undefined }) {
   const { data, error, isPending, isError } = useIncidents();
   const now = useNow();
+  // Contract says newest first; sort defensively so ordering never depends on it.
+  const sorted = useMemo(() => (data ? [...data].sort((a, b) => b.last_seen.localeCompare(a.last_seen)) : undefined), [data]);
 
   return (
     <section className="list" aria-label="Incidents">
@@ -23,9 +26,9 @@ export function IncidentList({ selectedId }: { selectedId: string | undefined })
         <StateView title="No incidents">Sentinel is watching SSH activity. Suspicious patterns will appear here.</StateView>
       )}
 
-      {data && data.length > 0 && (
+      {sorted && sorted.length > 0 && (
         <ol className="list__items">
-          {data.map((inc) => (
+          {sorted.map((inc) => (
             <li key={inc.id}>
               <IncidentRow inc={inc} selected={inc.id === selectedId} now={now} />
             </li>

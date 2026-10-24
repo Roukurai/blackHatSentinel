@@ -9,8 +9,11 @@ export function fmtUtc(iso: string | null | undefined): string {
   return d.toISOString().replace("T", " ").slice(0, 19) + "Z";
 }
 
-export function fmtUtcTime(iso: string | null | undefined): string {
-  return fmtUtc(iso).slice(11);
+// "15:51:15.123" — time of day in UTC with milliseconds, for timelines.
+export function fmtUtcMs(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "invalid time";
+  return d.toISOString().slice(11, 23);
 }
 
 export function relAge(iso: string | null | undefined, now: number): string {

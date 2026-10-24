@@ -92,7 +92,7 @@ const findings1: Finding[] = [
 
 // ---- inc-002: replayed burst, hostile usernames (medium, investigating) ----
 const ip2 = "198.51.100.23";
-const longName = "a".repeat(40) + "‮txt.exe" + "b".repeat(14);
+const longName = "a".repeat(40) + "\u202Etxt.exe" + "b".repeat(14);
 const ev2: SentinelEvent[] = [
   ev("2-0", 300, "ssh_invalid_user", "", ip2, 51000, `Invalid user  from ${ip2} port 51000`, "replay"),
   ev("2-1", 295, "ssh_invalid_user", "<script>alert(1)</script>", ip2, 51001, `Invalid user <script>alert(1)</script> from ${ip2} port 51001`, "replay"),
