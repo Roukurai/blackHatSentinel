@@ -1,6 +1,6 @@
 # api (Node.js + TypeScript) — owners: Kevin (API, correlation, notifier), Hugo (investigator module)
 
-Ingests `POST /events`, correlates SSH activity into incidents, and sends one Telegram alert per new incident (at most one extra alert on escalation). SQLite at `DB_PATH`. After a successful Telegram send, the AI investigator runs asynchronously and stores `investigation` on the incident. Telegram never waits for the LLM.
+Ingests `POST /events`, correlates SSH activity into incidents, and sends one Telegram alert per new incident (at most one extra alert on escalation). SQLite at `DB_PATH`. After each Telegram attempt (sent or failed) the AI investigator runs asynchronously and stores `investigation` on the incident; Telegram never waits for the LLM, and a Telegram outage never stops the investigation. Medium/high incidents with a source IP get a proposed temporary block (`action`). The API also serves the built dashboard.
 
 ## Run
 
@@ -12,11 +12,23 @@ node --experimental-strip-types api/src/index.ts
 
 The process reads the repo `.env`. Set OpenAI `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` for live investigations. `POST /events` is localhost only. Dashboard routes use HTTP basic auth when `DASHBOARD_USER` / `DASHBOARD_PASS` are set.
 
+## Dashboard
+
+Build once with `npm ci --prefix web && npm run build --prefix web`. The API serves `web/dist` (override with `WEB_DIST`) behind the same basic auth. Browser navigations (`Accept: text/html`) get the SPA, so the Telegram link `PUBLIC_BASE_URL/incidents/<id>` opens the dashboard; API calls (`Accept: application/json`) get JSON from the same paths.
+
+## Response actions (P1)
+
+- `POST /actions/:id/approve` re-checks policy (`RESPONSE_ALLOWLIST` CIDRs, this host's own addresses, loopback), then runs `RESPONSE_RUNNER block <ip> <ttl>` and `verify <ip>` with `execFile` (no shell). Status: `proposed → approved → applied → verified`, `expired` after `RESPONSE_BLOCK_TTL_SECONDS`.
+- Policy refusal returns `403 {"error": reason}`; approving anything not `proposed` returns `409`.
+- Without `RESPONSE_RUNNER` an approval is recorded as `failed` ("runner not configured"); nothing is faked.
+- `POST /actions/:id/reject` sets incident status `action_rejected`.
+- Runner: [`ops/sentinel-block`](../ops/sentinel-block) (install steps in its header; `RESPONSE_RUNNER_SUDO=1` runs it via `sudo -n`).
+
 ## Investigator (Hugo)
 
 Wiring: [`src/investigate.ts`](src/investigate.ts) + [`src/investigator/`](src/investigator/).
 
-- After Telegram flush → `enqueueInvestigations`
+- After each Telegram flush → `flushAndFollowUp` (`src/pipeline.ts`) proposes actions and calls `enqueueInvestigations` for every incident that was due (skips ones already investigating or with nothing new)
 - `POST /incidents/:id/investigate` re-runs
 - `GET /health` → `llm: ok|down` via `healthLlmField`
 - Handshake / E2E checklist: [`src/investigator/HANDSHAKE.md`](src/investigator/HANDSHAKE.md)
@@ -25,5 +37,6 @@ Wiring: [`src/investigate.ts`](src/investigate.ts) + [`src/investigator/`](src/i
 ## Test
 
 ```bash
-npm test --prefix api
+npm test --prefix api          # vitest (investigator) + node:test (api)
+npm run typecheck --prefix api # tsc, imports use .ts extensions
 ```
