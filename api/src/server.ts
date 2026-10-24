@@ -18,7 +18,18 @@ import {
 import type { SendText } from "./notify.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
 import { settingsOverview } from "./overview.ts";
-import { AuthExistsError, createStoredAuth, hashPassword, identityFor, validateNewAccount, type DashboardIdentity } from "./dashboard-auth.ts";
+import {
+  AuthExistsError,
+  clearSetupToken,
+  createStoredAuth,
+  ensureSetupToken,
+  hashPassword,
+  identityFor,
+  setupTokenMatches,
+  setupTokenPath,
+  validateNewAccount,
+  type DashboardIdentity,
+} from "./dashboard-auth.ts";
 import { clearAttempts, clearSessionCookie, hasValidSession, readSession, recordFailure, revokeSession, sessionCookie, tooManyAttempts } from "./session.ts";
 import {
   addUserNotification,
@@ -135,6 +146,11 @@ async function handleSetup(req: IncomingMessage, res: ServerResponse, config: Co
   const ip = clientIp(req);
   if (tooManyAttempts(ip)) throw new HttpError(429, "too many attempts");
   const body = readJsonObject(await readBody(req));
+  const tokenPath = setupTokenPath(config.dashboardAuthPath);
+  if (!setupTokenMatches(tokenPath, body.setup_token)) {
+    recordFailure(ip);
+    throw new HttpError(403, "invalid setup token");
+  }
   const account = validateNewAccount(body.username, body.password);
   if (typeof account === "string") throw new HttpError(400, account);
   let stored;
@@ -147,6 +163,7 @@ async function handleSetup(req: IncomingMessage, res: ServerResponse, config: Co
     throw err;
   }
   clearAttempts(ip);
+  clearSetupToken(tokenPath);
   const user = insertUser(db, stored.username, stored.passwordHash);
   establishSession(res, {
     username: stored.username,
@@ -215,7 +232,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
   }
 
   if (path === "/auth/status" && req.method === "GET") {
-    sendJson(res, 200, { configured: identityFor(config) !== null });
+    const configured = identityFor(config) !== null;
+    // Only where to find the token, never the token itself.
+    sendJson(res, 200, configured ? { configured } : { configured, setup_token_path: setupTokenPath(config.dashboardAuthPath ?? "") });
     return;
   }
 
@@ -415,6 +434,11 @@ export function createServer(options: ServerOptions): Server {
   ensureUserTables(options.db);
   const stored = identityFor(options.config);
   if (stored?.passwordHash) importFileUser(options.db, stored.username, stored.passwordHash);
+  if (!stored && options.config.dashboardAuthPath) {
+    const tokenPath = setupTokenPath(options.config.dashboardAuthPath);
+    ensureSetupToken(tokenPath);
+    console.log(`[sentinell] first-run setup: the dashboard asks for the token in ${tokenPath} (read it on this host, e.g. sudo cat ${tokenPath})`);
+  }
   const investigator =
     options.investigator ??
     createApiInvestigator(options.db, options.config.llmSettingsPath);

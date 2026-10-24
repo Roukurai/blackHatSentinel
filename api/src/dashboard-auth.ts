@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 // The password chosen on first launch. The file holds a hash and a session
@@ -24,6 +24,38 @@ export interface DashboardIdentity {
 export function authPathForDb(dbPath: string): string {
   if (dbPath === ":memory:") return "";
   return path.join(path.dirname(dbPath), "dashboard-auth.json");
+}
+
+// First-run setup token. Until a password exists, /setup only accepts a caller who can
+// read this file on the host, so whoever reaches an exposed port first cannot claim
+// the dashboard. The token is never logged or sent to a browser; only its path is shown.
+export function setupTokenPath(authPath: string): string {
+  return authPath ? path.join(path.dirname(authPath), "setup-token") : "";
+}
+
+export function ensureSetupToken(filePath: string): void {
+  if (!filePath) return;
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  try {
+    writeFileSync(filePath, `${randomBytes(32).toString("base64url")}\n`, { flag: "wx", mode: 0o600 });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+  }
+}
+
+export function setupTokenMatches(filePath: string, presented: unknown): boolean {
+  if (!filePath || typeof presented !== "string" || presented.length === 0 || presented.length > 256) return false;
+  let expected: string;
+  try {
+    expected = readFileSync(filePath, "utf8").trim();
+  } catch {
+    return false;
+  }
+  return expected.length > 0 && safeEqual(presented.trim(), expected);
+}
+
+export function clearSetupToken(filePath: string): void {
+  if (filePath) rmSync(filePath, { force: true });
 }
 
 export function envSessionSecret(user: string, pass: string): string {

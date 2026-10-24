@@ -110,6 +110,18 @@ export function authenticate(
   password: string,
 ): DashboardUser | null {
   const existing = findUserByUsername(db, username);
+  // The host identity (dashboard-auth.json or DASHBOARD_USER/PASS) is authoritative for its
+  // own username: after a password change the old stored hash must stop working at once.
+  const isIdentityUser = identity !== null && username.toLowerCase() === identity.username.toLowerCase();
+  if (existing && isIdentityUser) {
+    if (!credentialsMatch(identity, identity.username, password)) return null;
+    if (identity.passwordHash ? existing.passwordHash !== identity.passwordHash : !verifyPassword(password, existing.passwordHash)) {
+      const hash = identity.passwordHash ?? hashPassword(password);
+      updatePasswordHash(db, existing.id, hash);
+      return { ...existing, passwordHash: hash };
+    }
+    return existing;
+  }
   if (existing) {
     if (verifyPassword(password, existing.passwordHash)) return existing;
     if (identity && credentialsMatch(identity, username, password)) {

@@ -121,22 +121,23 @@ function getApi(): Promise<Api> {
   return fixtureApi;
 }
 
-export async function authStatus(signal?: AbortSignal): Promise<{ configured: boolean }> {
+export async function authStatus(signal?: AbortSignal): Promise<{ configured: boolean; setup_token_path?: string }> {
   return request("GET", "/auth/status", signal);
 }
 
-export async function setupAccount(username: string, password: string): Promise<void> {
+export async function setupAccount(username: string, password: string, setupToken: string): Promise<void> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/setup`, {
       method: "POST",
       credentials: "same-origin",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, setup_token: setupToken }),
     });
   } catch {
     throw new ApiError("network", "API unreachable");
   }
+  if (res.status === 403) throw new ApiError("http", "That setup token is not right. Copy it again from the file on the server.", 403);
   if (res.status === 409) throw new ApiError("http", "A password is already set. Sign in with it.", 409);
   if (res.status === 429) throw new ApiError("http", "Too many attempts. Wait a minute and try again.", 429);
   if (!res.ok) throw new ApiError("http", (await errorReason(res)) ?? `HTTP ${res.status}`, res.status);

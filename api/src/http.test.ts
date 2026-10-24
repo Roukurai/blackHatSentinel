@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -514,8 +514,29 @@ test("first launch requires choosing a password, then that password signs in", a
   await once(server, "listening");
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
+  const tokenPath = path.join(dir, "setup-token");
   const status = await fetch(`${base}/auth/status`);
-  assert.deepEqual(await status.json(), { configured: false });
+  const statusBody = await status.json() as { configured: boolean; setup_token_path: string; setup_token?: string };
+  assert.equal(statusBody.configured, false);
+  assert.equal(statusBody.setup_token_path, tokenPath);
+  assert.equal("setup_token" in statusBody, false);
+  const token = readFileSync(tokenPath, "utf8").trim();
+  assert.ok(token.length >= 40);
+
+  // Reaching the port is not enough: claiming the dashboard needs the token from this host.
+  const noToken = await fetch(`${base}/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "attacker", password: "attacker-long-password" }),
+  });
+  assert.equal(noToken.status, 403);
+  const wrongToken = await fetch(`${base}/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "attacker", password: "attacker-long-password", setup_token: "x".repeat(43) }),
+  });
+  assert.equal(wrongToken.status, 403);
+  assert.equal(existsSync(authPath), false);
   const locked = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
   assert.equal(locked.status, 401);
   assert.equal((await locked.json() as { error: string }).error, "setup_required");
@@ -523,16 +544,17 @@ test("first launch requires choosing a password, then that password signs in", a
   const weak = await fetch(`${base}/setup`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username: "analyst", password: "short" }),
+    body: JSON.stringify({ username: "analyst", password: "short", setup_token: token }),
   });
   assert.equal(weak.status, 400);
 
   const created = await fetch(`${base}/setup`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username: "analyst", password: "choose-a-long-password" }),
+    body: JSON.stringify({ username: "analyst", password: "choose-a-long-password", setup_token: token }),
   });
   assert.equal(created.status, 200);
+  assert.equal(existsSync(tokenPath), false, "setup token is single-use");
   const stored = readFileSync(authPath, "utf8");
   assert.equal(stored.includes("choose-a-long-password"), false);
   assert.match(stored, /scrypt:/);
@@ -543,7 +565,7 @@ test("first launch requires choosing a password, then that password signs in", a
   const again = await fetch(`${base}/setup`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username: "other", password: "another-long-password" }),
+    body: JSON.stringify({ username: "other", password: "another-long-password", setup_token: token }),
   });
   assert.equal(again.status, 409);
 
@@ -613,4 +635,35 @@ test("a person only receives notifications addressed to them", async () => {
   server.close();
   await once(server, "close");
   db.close();
+});
+
+test("changing the host password revokes the old one immediately", async () => {
+  const db = openDatabase(":memory:");
+  const start = async (pass: string) => {
+    const server = createServer({ config: config({ dashboardUser: "admin", dashboardPass: pass, dashboardAuthPath: "" }), db, send: async () => {} });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    return { server, base: `http://127.0.0.1:${(server.address() as AddressInfo).port}` };
+  };
+  const basic = (pass: string) => ({ authorization: `Basic ${Buffer.from(`admin:${pass}`).toString("base64")}`, accept: "application/json" });
+
+  const first = await start("old-long-password");
+  assert.equal((await fetch(`${first.base}/health`, { headers: basic("old-long-password") })).status, 200);
+  first.server.close();
+
+  // Operator rotates DASHBOARD_PASS and restarts; the stored row still has the old hash.
+  const second = await start("new-long-password");
+  try {
+    assert.equal((await fetch(`${second.base}/health`, { headers: basic("old-long-password") })).status, 401);
+    const oldLogin = await fetch(`${second.base}/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "old-long-password" }),
+    });
+    assert.equal(oldLogin.status, 401);
+    assert.equal((await fetch(`${second.base}/health`, { headers: basic("new-long-password") })).status, 200);
+  } finally {
+    second.server.close();
+    db.close();
+  }
 });

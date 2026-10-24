@@ -31,7 +31,7 @@ function GuardedWorkspace() {
   const needsLogin = health.error instanceof ApiError && health.error.kind === "auth";
 
   if (status.isPending) return <AuthBoot />;
-  if (needsSetup) return <SetupPassword onSuccess={refresh} />;
+  if (needsSetup) return <SetupPassword tokenPath={status.data?.setup_token_path} onSuccess={refresh} />;
   if (needsLogin) return <LoginScreen onSuccess={refresh} />;
   if (health.isPending && !health.data) return <AuthBoot />;
 

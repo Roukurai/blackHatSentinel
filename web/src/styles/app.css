@@ -1580,3 +1580,6 @@ kbd {
   .setup-step__body { padding: 4px 16px 16px; }
   .setup-step:not(:last-child)::before { display: none; }
 }
+
+.login__hint { font-size: 13px; line-height: 18px; color: var(--ds-gray-900); }
+.login__hint code { font-size: 12px; overflow-wrap: anywhere; color: var(--ds-gray-1000); }
