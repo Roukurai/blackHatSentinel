@@ -18,13 +18,39 @@ export type PersistInvestigation = (
   investigation: Investigation,
 ) => void | Promise<void>;
 
-/** Fire-and-forget investigate; errors are swallowed (investigate never throws). */
+async function safePersist(
+  persist: PersistInvestigation,
+  incidentId: string,
+  inv: Investigation,
+): Promise<void> {
+  try {
+    await persist(incidentId, inv);
+  } catch (err) {
+    console.error(
+      "[investigator] persist failed",
+      incidentId,
+      err instanceof Error ? err.name : "unknown",
+    );
+  }
+}
+
+/** Fire-and-forget investigate; investigate never throws; persist errors are logged. */
 export function scheduleInvestigation(
   investigator: Investigator,
   incidentId: string,
   persist: PersistInvestigation,
 ): void {
-  void investigator.investigate(incidentId).then((inv) => persist(incidentId, inv));
+  void investigator
+    .investigate(incidentId)
+    .then((inv) => safePersist(persist, incidentId, inv))
+    .catch((err) => {
+      // Defensive: investigate is documented never to throw.
+      console.error(
+        "[investigator] scheduleInvestigation unexpected",
+        incidentId,
+        err instanceof Error ? err.name : "unknown",
+      );
+    });
 }
 
 /** Handler body for POST /incidents/:id/investigate */
@@ -34,7 +60,7 @@ export async function handleInvestigateRoute(
   persist?: PersistInvestigation,
 ): Promise<Investigation> {
   const inv = await investigator.investigate(incidentId);
-  if (persist) await persist(incidentId, inv);
+  if (persist) await safePersist(persist, incidentId, inv);
   return inv;
 }
 
