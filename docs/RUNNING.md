@@ -29,8 +29,8 @@ Replay files hold real IPs + a key fingerprint — they live in
 `/var/lib/sentinel/replay/` and are NEVER committed (`*.jsonl` is gitignored).
 
     journalctl -u ssh --since yesterday -o json > /var/lib/sentinel/replay/real.jsonl
-    # regenerate the burst slice from it:
-    python3 ops/slice-burst.py   # filters real.jsonl → demo-burst.jsonl
+    # build the burst slice (one attacker IP) from it:
+    grep -F "<burst_source_ip>" /var/lib/sentinel/replay/real.jsonl > /var/lib/sentinel/replay/demo-burst.jsonl
 
 ## Reset between rehearsals
     ./ops/reset.sh    # wipes incident DB + nft blocklist, keeps the journal
