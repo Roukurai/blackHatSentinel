@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { ChatMessage } from "./llm.js";
-import { chat, LlmFailedError } from "./llm.js";
-import type { LlmConfig, ModelOutput } from "./types.js";
+import type { ChatMessage } from "./llm.ts";
+import { chat, LlmFailedError } from "./llm.ts";
+import type { LlmConfig, ModelOutput } from "./types.ts";
 
 const findingSchema = z.object({
   kind: z.enum(["observed", "suspected", "unknown"]),

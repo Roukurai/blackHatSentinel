@@ -4,12 +4,12 @@ import {
   extractAuthFields,
   prefetchIncidentEvents,
   type ToolContext,
-} from "../tools.js";
+} from "../tools.ts";
 import {
   allFixtureDeps,
   benignEvents,
   burstIncident,
-} from "./fixtures.js";
+} from "./fixtures.ts";
 
 function ctx(incidentId = burstIncident.id): ToolContext {
   return {

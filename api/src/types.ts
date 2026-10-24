@@ -35,6 +35,9 @@ export type Pattern =
   | "success_after_failures"
   | "new_source_success";
 
+export type { Investigation, Finding } from "./investigator/types.ts";
+import type { Investigation } from "./investigator/types.ts";
+
 export interface Incident {
   id: string;
   host_id: string;
@@ -52,7 +55,7 @@ export interface Incident {
     attempts: number;
     last_attempt_at: string | null;
   };
-  investigation: null;
+  investigation: Investigation | null;
   action: null;
 }
 

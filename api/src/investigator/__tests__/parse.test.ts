@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractJsonObject, parseModelOutput } from "../parse.js";
-import { LlmFailedError } from "../llm.js";
+import { extractJsonObject, parseModelOutput } from "../parse.ts";
+import { LlmFailedError } from "../llm.ts";
 
 describe("parse", () => {
   it("parses fenced JSON", () => {

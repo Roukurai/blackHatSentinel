@@ -1,4 +1,4 @@
-import type { LlmConfig } from "./types.js";
+import type { LlmConfig } from "./types.ts";
 
 export class LlmUnavailableError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {

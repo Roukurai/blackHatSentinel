@@ -1,6 +1,6 @@
 # Investigator ↔ Kevin / Jordi handshake
 
-Status: **Hugo module ready** (PR to `main`). Kevin: implement store methods and call the helpers below.
+Status: **Wired on `investigator/wire-api`** — API calls `scheduleInvestigation` after successful Telegram flush; persists `investigation_json`; `POST /incidents/:id/investigate`; `/health` uses `healthLlmField`.
 
 ## Kevin: wire after Telegram is queued
 
@@ -12,7 +12,7 @@ import {
   scheduleInvestigation,
   handleInvestigateRoute,
   healthLlmField,
-} from "./investigator/index.js";
+} from "./investigator/index.ts";
 
 const investigator = createInvestigator(depsFromStore(store), loadLlmConfig());
 investigator.startHealthProbe();
@@ -47,12 +47,12 @@ Hugo never writes the DB. Telegram must not await the investigator.
 
 See `samples/*.json` for burst, success-after-failures, and benign new-IP / known-key UI fixtures.
 
-## E2E checklist (checkpoint — needs Kevin + Antonio)
+## E2E checklist (checkpoint — needs Antonio + VPS env)
 
-Blocked until ingest / incidents / Telegram exist on the API.
+Wiring on this branch is done (`investigate.ts` + `enqueueInvestigations` after `flushNotifications`). Remaining is live env + demo:
 
-- [ ] Kevin merges investigator and wires `depsFromStore` + `scheduleInvestigation` after notifier enqueue
-- [ ] `LLM_*` + `HOST_ID` set on VPS (never committed)
+- [x] Wire `depsFromDatabase` + `enqueueInvestigations` after Telegram flush
+- [ ] `LLM_*` + `HOST_ID` set on VPS (never committed); OpenAI defaults in `.env.example`
 - [ ] `LIVE_LLM=1 npm test -- live.smoke` passes on VPS (or local with key)
 - [ ] `ops/demo-scenario.sh` → incident → one Telegram → investigation on `GET /incidents/:id` → dashboard findings
 - [ ] Unset `LLM_API_KEY`, restart API → Telegram still fires; investigation `unavailable`; `/health` `llm: "down"`

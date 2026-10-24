@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createInvestigator } from "../index.js";
-import type { LlmConfig, SentinelEvent } from "../types.js";
+import { createInvestigator } from "../index.ts";
+import type { LlmConfig, SentinelEvent } from "../types.ts";
 import {
   burstIncident,
   createMemoryDeps,
   makeIncident,
-} from "./fixtures.js";
+} from "./fixtures.ts";
 
 const hostile: SentinelEvent = {
   event_id: "evt-inject-001",
@@ -32,7 +32,7 @@ describe("injection hardening", () => {
     const deps = createMemoryDeps([incident], [hostile]);
 
     const cfg: LlmConfig = {
-      baseUrl: "https://api.x.ai/v1",
+      baseUrl: "https://api.openai.com/v1",
       apiKey: "k",
       model: "m",
       timeoutSeconds: 10,
@@ -85,7 +85,7 @@ describe("injection hardening", () => {
     const inv = createInvestigator(
       createMemoryDeps([burstIncident], []),
       {
-        baseUrl: "https://api.x.ai/v1",
+        baseUrl: "https://api.openai.com/v1",
         apiKey: "",
         model: "",
         timeoutSeconds: 5,

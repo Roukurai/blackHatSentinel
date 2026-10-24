@@ -58,9 +58,15 @@ function markFailed(record: IncidentRecord): void {
   record.notifyClaimed = false;
 }
 
-export async function flushNotifications(db: DatabaseSync, config: Config, send?: SendText): Promise<void> {
+/** Returns incident ids that were successfully notified in this flush (new or escalation). */
+export async function flushNotifications(
+  db: DatabaseSync,
+  config: Config,
+  send?: SendText,
+): Promise<string[]> {
   const deliver = send ?? ((text: string) => deliverTelegram(config, text));
   const due = listDueIncidents(db, new Date().toISOString());
+  const notified: string[] = [];
   for (const incident of due) {
     if (!claimNotification(db, incident.id)) continue;
     const current = incidentById(db, incident.id);
@@ -69,6 +75,7 @@ export async function flushNotifications(db: DatabaseSync, config: Config, send?
     try {
       await deliver(text);
       markSent(current);
+      notified.push(current.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "telegram failed";
       console.error(`telegram notify failed for ${current.id}: ${message}`);
@@ -76,4 +83,5 @@ export async function flushNotifications(db: DatabaseSync, config: Config, send?
     }
     saveIncident(db, current);
   }
+  return notified;
 }

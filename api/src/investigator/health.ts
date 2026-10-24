@@ -1,5 +1,5 @@
-import { probeModels } from "./llm.js";
-import type { LlmConfig } from "./types.js";
+import { probeModels } from "./llm.ts";
+import type { LlmConfig } from "./types.ts";
 
 const OK_TTL_MS = 120_000;
 const PROBE_INTERVAL_MS = 30_000;
@@ -7,8 +7,11 @@ const PROBE_INTERVAL_MS = 30_000;
 export class HealthTracker {
   private lastOkAt = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private readonly cfg: LlmConfig;
 
-  constructor(private readonly cfg: LlmConfig) {}
+  constructor(cfg: LlmConfig) {
+    this.cfg = cfg;
+  }
 
   markOk(): void {
     this.lastOkAt = Date.now();

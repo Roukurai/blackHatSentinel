@@ -1,11 +1,11 @@
-import { fallbackSummary } from "./fallback.js";
+import { fallbackSummary } from "./fallback.ts";
 import type {
   Finding,
   Incident,
   ModelOutput,
   SentinelEvent,
-} from "./types.js";
-import { MITRE_ALLOWLIST } from "./types.js";
+} from "./types.ts";
+import { MITRE_ALLOWLIST } from "./types.ts";
 
 const COMPROMISE_RE =
   /compromis|breach|gained access|intrusion confirmed/i;

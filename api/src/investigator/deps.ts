@@ -5,7 +5,7 @@ import type {
   InvestigatorDeps,
   MaybePromise,
   SentinelEvent,
-} from "./types.js";
+} from "./types.ts";
 
 /**
  * Minimal store surface Kevin's SQLite layer should expose.

@@ -1,11 +1,11 @@
-import type { ToolDefinition } from "./llm.js";
+import type { ToolDefinition } from "./llm.ts";
 import type {
   HostMetadata,
   Incident,
   InvestigatorDeps,
   SentinelEvent,
-} from "./types.js";
-import { FAILURE_EVENT_TYPES } from "./types.js";
+} from "./types.ts";
+import { FAILURE_EVENT_TYPES } from "./types.ts";
 
 const MAX_EVENTS = 100;
 const MAX_USERNAMES = 20;

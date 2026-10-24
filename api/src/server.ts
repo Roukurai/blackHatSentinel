@@ -3,14 +3,23 @@ import { timingSafeEqual } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { addCounter, eventsByIds, hasFailedNotification, incidentById, latestEventTimestamp, listIncidentRecords, toIncident } from "./db.ts";
 import { ingest } from "./ingest.ts";
+import {
+  createApiInvestigator,
+  enqueueInvestigations,
+  handleInvestigateRoute,
+  healthLlmField,
+  persistInvestigationResult,
+} from "./investigate.ts";
 import { flushNotifications, type SendText } from "./notify.ts";
 import type { Config } from "./types.ts";
+import type { Investigator } from "./investigator/index.ts";
 import { ValidationError } from "./validate.ts";
 
 export interface ServerOptions {
   config: Config;
   db: DatabaseSync;
   send?: SendText;
+  investigator?: Investigator;
 }
 
 class HttpError extends Error {
@@ -64,6 +73,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
 
 async function handle(req: IncomingMessage, res: ServerResponse, options: ServerOptions): Promise<void> {
   const { config, db } = options;
+  const investigator = options.investigator ?? createApiInvestigator(db);
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
   if (path === "/events") {
@@ -77,7 +87,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
       throw new ValidationError("body must be JSON");
     }
     const result = ingest(db, body, config);
-    await flushNotifications(db, config, options.send);
+    const notified = await flushNotifications(db, config, options.send);
+    enqueueInvestigations(investigator, db, notified);
     sendJson(res, 200, result);
     return;
   }
@@ -90,7 +101,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
   if (path === "/health" && req.method === "GET") {
     sendJson(res, 200, {
       collector_last_event_at: latestEventTimestamp(db),
-      llm: "down",
+      llm: healthLlmField(investigator),
       telegram: config.telegramToken && config.telegramChatId && !hasFailedNotification(db) ? "ok" : "failed",
       db: "ok",
     });
@@ -99,6 +110,17 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
 
   if (path === "/incidents" && req.method === "GET") {
     sendJson(res, 200, listIncidentRecords(db).map(toIncident));
+    return;
+  }
+
+  if (path.startsWith("/incidents/") && path.endsWith("/investigate") && req.method === "POST") {
+    const id = path.slice("/incidents/".length, -"/investigate".length);
+    if (!/^inc-\d+$/.test(id)) throw new HttpError(404, "not found");
+    if (!incidentById(db, id)) throw new HttpError(404, "not found");
+    const investigation = await handleInvestigateRoute(investigator, id, async (incidentId, inv) => {
+      persistInvestigationResult(db, incidentId, inv);
+    });
+    sendJson(res, 200, investigation);
     return;
   }
 
@@ -115,8 +137,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
 }
 
 export function createServer(options: ServerOptions): Server {
+  const investigator = options.investigator ?? createApiInvestigator(options.db);
+  const opts: ServerOptions = { ...options, investigator };
   return createHttpServer((req, res) => {
-    void handle(req, res, options).catch((err: unknown) => {
+    void handle(req, res, opts).catch((err: unknown) => {
       if (res.headersSent) return;
       if (err instanceof ValidationError || (err instanceof HttpError && err.status === 400)) {
         const total = addCounter(options.db, "rejected_batches");

@@ -11,7 +11,7 @@
  *   });
  */
 
-import type { Investigation, Investigator } from "./types.js";
+import type { Investigation, Investigator } from "./types.ts";
 
 export type PersistInvestigation = (
   incidentId: string,

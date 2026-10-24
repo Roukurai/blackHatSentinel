@@ -105,6 +105,7 @@ export function ingest(db: DatabaseSync, body: unknown, config: Config): IngestR
           pendingKind: "new",
           nextSendAt: null,
           notifyClaimed: false,
+          investigation: null,
         });
         continue;
       }

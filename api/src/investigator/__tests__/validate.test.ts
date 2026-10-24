@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateModelOutput } from "../validate.js";
-import { demoEvents, demoIncident } from "./fixtures.js";
+import { validateModelOutput } from "../validate.ts";
+import { demoEvents, demoIncident } from "./fixtures.ts";
 
 describe("validateModelOutput", () => {
   const seen = new Set(demoEvents.map((e) => e.event_id));

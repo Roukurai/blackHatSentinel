@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInvestigator } from "../index.js";
+import { createInvestigator } from "../index.ts";
 import {
   handleInvestigateRoute,
   healthLlmField,
   scheduleInvestigation,
-} from "../wire.js";
-import { allFixtureDeps, burstIncident } from "./fixtures.js";
+} from "../wire.ts";
+import { allFixtureDeps, burstIncident } from "./fixtures.ts";
 
 function unconfigured() {
   return createInvestigator(allFixtureDeps(), {
-    baseUrl: "https://api.x.ai/v1",
+    baseUrl: "https://api.openai.com/v1",
     apiKey: "",
     model: "",
     timeoutSeconds: 5,
