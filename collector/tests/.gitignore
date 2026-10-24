@@ -1,0 +1,2 @@
+# Root gitignore drops *.jsonl (raw journal exports). This fixture uses RFC5737 IPs only.
+!fixtures.jsonl

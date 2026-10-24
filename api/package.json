@@ -1,5 +1,6 @@
 {
   "name": "sentinel-api",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -7,6 +8,17 @@
   },
   "scripts": {
     "start": "node --experimental-strip-types src/index.ts",
-    "test": "node --experimental-strip-types --test src/detect.test.ts src/ingest.test.ts src/http.test.ts"
+    "test": "vitest run && node --experimental-strip-types --test src/detect.test.ts src/ingest.test.ts src/http.test.ts src/evidence.test.ts",
+    "test:api": "node --experimental-strip-types --test src/detect.test.ts src/ingest.test.ts src/http.test.ts src/evidence.test.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
   }
 }
