@@ -74,7 +74,9 @@ report, notify). Humans approve only actions that could lock someone out.
 
 ## Backlog (Linear)
 
-- Jordi’s Linear workspace tracks ideas **outside** the current CONTRACT / P0 demo scope
+- Project: **BlackHat Sentinel — Hackathon MVP**
+  (team `@jordidimass` / `JOR`; https://linear.app/jordidimass/project/blackhat-sentinel-hackathon-mvp-beadd2da4e16)
+- Use that Linear project for ideas **outside** the current CONTRACT / P0 demo scope
   (post-checkpoint polish, P2 extras, deferred features).
 - In-scope hackathon work ships via GitHub PRs with conventional commit prefixes.
 - Changing `docs/CONTRACT.md` still requires team agreement — a Linear issue alone is not enough.

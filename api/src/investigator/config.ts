@@ -1,6 +1,6 @@
-import type { LlmConfig } from "./types.js";
+import type { LlmConfig } from "./types.ts";
 
-const DEFAULT_BASE_URL = "https://api.x.ai/v1";
+const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_TIMEOUT = 30;
 
 export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {

@@ -80,6 +80,26 @@ test("localhost ingest creates an incident and serves it", async () => {
   assert.equal(body.notification.status, "sent");
   assert.ok(body.events.some((event) => event.username === ""));
 
+  // Investigation is fire-and-forget after Telegram; wait briefly for persist (no LLM key → unavailable).
+  let investigation: { status?: string } | null = null;
+  for (let i = 0; i < 50; i++) {
+    await new Promise((r) => setTimeout(r, 20));
+    const again = await fetch(`${base}/incidents/${incidents[0].id}`);
+    const payload = await again.json() as { investigation: { status?: string } | null; status: string };
+    if (payload.investigation) {
+      investigation = payload.investigation;
+      assert.equal(payload.investigation.status, "unavailable");
+      assert.equal(payload.status, "new");
+      break;
+    }
+  }
+  assert.ok(investigation, "expected investigation to be persisted");
+
+  const rerun = await fetch(`${base}/incidents/${incidents[0].id}/investigate`, { method: "POST" });
+  assert.equal(rerun.status, 200);
+  const rerunBody = await rerun.json() as { status: string };
+  assert.equal(rerunBody.status, "unavailable");
+
   const health = await fetch(`${base}/health`);
   assert.deepEqual(await health.json(), {
     collector_last_event_at: "2026-10-24T22:00:05.000Z",

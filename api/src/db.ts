@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { Incident, Pattern, SentinelEvent, Severity } from "./types.ts";
+import type { Incident, Investigation, Pattern, SentinelEvent, Severity } from "./types.ts";
 
 export interface SourceKey {
   hostId: string;
@@ -33,6 +33,7 @@ export interface IncidentRecord {
   pendingKind: PendingKind | null;
   nextSendAt: string | null;
   notifyClaimed: boolean;
+  investigation: Investigation | null;
 }
 
 const SCHEMA = `
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS incidents (
   escalation_sent INTEGER NOT NULL DEFAULT 0,
   pending_kind TEXT,
   next_send_at TEXT,
-  notify_claimed INTEGER NOT NULL DEFAULT 0
+  notify_claimed INTEGER NOT NULL DEFAULT 0,
+  investigation_json TEXT
 );
 CREATE TABLE IF NOT EXISTS counters (
   name TEXT PRIMARY KEY,
@@ -89,6 +91,11 @@ export function openDatabase(dbPath: string): DatabaseSync {
   db.exec("PRAGMA busy_timeout = 3000");
   if (dbPath !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
   db.exec(SCHEMA);
+  try {
+    db.exec("ALTER TABLE incidents ADD COLUMN investigation_json TEXT");
+  } catch {
+    // column already present
+  }
   db.exec("UPDATE incidents SET notify_claimed = 0 WHERE notify_claimed = 1");
   return db;
 }
@@ -197,8 +204,8 @@ export function insertIncident(db: DatabaseSync, record: IncidentRecord): void {
       id, seq, host_id, source_ip, username_key, usernames, patterns, severity, status,
       first_seen, last_seen, event_ids, failed_attempts, notification_status,
       notification_attempts, notification_last_attempt_at, notification_last_sent_at,
-      escalation_sent, pending_kind, next_send_at, notify_claimed
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      escalation_sent, pending_kind, next_send_at, notify_claimed, investigation_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     record.id,
     record.seq,
@@ -221,6 +228,7 @@ export function insertIncident(db: DatabaseSync, record: IncidentRecord): void {
     record.pendingKind,
     record.nextSendAt,
     record.notifyClaimed ? 1 : 0,
+    record.investigation ? JSON.stringify(record.investigation) : null,
   );
 }
 
@@ -230,7 +238,7 @@ export function saveIncident(db: DatabaseSync, record: IncidentRecord): void {
       usernames = ?, patterns = ?, severity = ?, status = ?, first_seen = ?, last_seen = ?,
       event_ids = ?, failed_attempts = ?, notification_status = ?, notification_attempts = ?,
       notification_last_attempt_at = ?, notification_last_sent_at = ?, escalation_sent = ?,
-      pending_kind = ?, next_send_at = ?, notify_claimed = ?
+      pending_kind = ?, next_send_at = ?, notify_claimed = ?, investigation_json = ?
     WHERE id = ?
   `).run(
     JSON.stringify(record.usernames),
@@ -249,8 +257,20 @@ export function saveIncident(db: DatabaseSync, record: IncidentRecord): void {
     record.pendingKind,
     record.nextSendAt,
     record.notifyClaimed ? 1 : 0,
+    record.investigation ? JSON.stringify(record.investigation) : null,
     record.id,
   );
+}
+
+export function saveInvestigation(
+  db: DatabaseSync,
+  incidentId: string,
+  investigation: Investigation,
+  status: string,
+): void {
+  db.prepare(`
+    UPDATE incidents SET investigation_json = ?, status = ? WHERE id = ?
+  `).run(JSON.stringify(investigation), status, incidentId);
 }
 
 export function listIncidentRecords(db: DatabaseSync): IncidentRecord[] {
@@ -323,7 +343,7 @@ export function toIncident(record: IncidentRecord): Incident {
       attempts: record.notificationAttempts,
       last_attempt_at: record.notificationLastAttemptAt,
     },
-    investigation: null,
+    investigation: record.investigation,
     action: null,
   };
 }
@@ -365,5 +385,15 @@ function mapIncident(row: Row): IncidentRecord {
     pendingKind: text(row.pending_kind) as PendingKind | null,
     nextSendAt: text(row.next_send_at),
     notifyClaimed: Number(row.notify_claimed) === 1,
+    investigation: parseInvestigation(row.investigation_json),
   };
+}
+
+function parseInvestigation(raw: unknown): Investigation | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  try {
+    return JSON.parse(String(raw)) as Investigation;
+  } catch {
+    return null;
+  }
 }

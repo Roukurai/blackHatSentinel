@@ -3,23 +3,23 @@
  * notify queued → scheduleInvestigation → persist → health field.
  */
 import { describe, expect, it, vi } from "vitest";
-import { createInvestigator, loadLlmConfig } from "../index.js";
+import { createInvestigator, loadLlmConfig } from "../index.ts";
 import {
   healthLlmField,
   scheduleInvestigation,
   handleInvestigateRoute,
-} from "../wire.js";
+} from "../wire.ts";
 import {
   allFixtureDeps,
   burstIncident,
   demoIncident,
-} from "./fixtures.js";
-import type { Investigation } from "../types.js";
+} from "./fixtures.ts";
+import type { Investigation } from "../types.ts";
 
 describe("e2e Kevin wiring (in-memory)", () => {
   it("without LLM key: investigation unavailable; llm health down", async () => {
     const cfg = loadLlmConfig({
-      LLM_BASE_URL: "https://api.x.ai/v1",
+      LLM_BASE_URL: "https://api.openai.com/v1",
       LLM_API_KEY: "",
       LLM_MODEL: "",
       LLM_TIMEOUT_SECONDS: "5",
@@ -41,11 +41,11 @@ describe("e2e Kevin wiring (in-memory)", () => {
     expect(healthLlmField(investigator)).toBe("down");
   });
 
-  it("POST /investigate style rerun with mock Grok returns ok", async () => {
+  it("POST /investigate style rerun with mock LLM returns ok", async () => {
     const investigator = createInvestigator(allFixtureDeps(), {
-      baseUrl: "https://api.x.ai/v1",
+      baseUrl: "https://api.openai.com/v1",
       apiKey: "demo",
-      model: "grok-test",
+      model: "gpt-test",
       timeoutSeconds: 10,
       configured: true,
       fetch: async () =>

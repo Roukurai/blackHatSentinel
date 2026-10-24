@@ -1,4 +1,4 @@
-import type { Incident } from "./types.js";
+import type { Incident } from "./types.ts";
 
 export function fallbackSummary(incident: Incident, prefix?: string): string {
   const patterns = incident.patterns.length

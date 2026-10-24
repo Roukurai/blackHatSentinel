@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInvestigator } from "../index.js";
-import type { LlmConfig } from "../types.js";
-import { allFixtureDeps, burstIncident } from "./fixtures.js";
+import { createInvestigator } from "../index.ts";
+import type { LlmConfig } from "../types.ts";
+import { allFixtureDeps, burstIncident } from "./fixtures.ts";
 
 function cfg(over: Partial<LlmConfig> = {}): LlmConfig {
   return {
-    baseUrl: "https://api.x.ai/v1",
+    baseUrl: "https://api.openai.com/v1",
     apiKey: "test-key",
-    model: "grok-test",
+    model: "gpt-test",
     timeoutSeconds: 5,
     configured: true,
     ...over,

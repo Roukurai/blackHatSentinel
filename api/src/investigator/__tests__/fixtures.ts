@@ -2,7 +2,7 @@ import type {
   Incident,
   InvestigatorDeps,
   SentinelEvent,
-} from "../types.js";
+} from "../types.ts";
 
 function ev(
   partial: Omit<SentinelEvent, "host_id" | "origin"> & {

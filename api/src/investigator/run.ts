@@ -1,27 +1,27 @@
-import { fallbackSummary } from "./fallback.js";
+import { fallbackSummary } from "./fallback.ts";
 import {
   chat,
   LlmFailedError,
   LlmUnavailableError,
   type ChatMessage,
-} from "./llm.js";
-import { parseWithRepair } from "./parse.js";
-import { buildUserMessage, SYSTEM_PROMPT } from "./prompt.js";
+} from "./llm.ts";
+import { parseWithRepair } from "./parse.ts";
+import { buildUserMessage, SYSTEM_PROMPT } from "./prompt.ts";
 import {
   executeTool,
   prefetchIncidentEvents,
   TOOL_DEFINITIONS,
   type ToolContext,
-} from "./tools.js";
+} from "./tools.ts";
 import type {
   Incident,
   Investigation,
   InvestigatorDeps,
   LlmConfig,
   SentinelEvent,
-} from "./types.js";
-import { validateModelOutput } from "./validate.js";
-import type { HealthTracker } from "./health.js";
+} from "./types.ts";
+import { validateModelOutput } from "./validate.ts";
+import type { HealthTracker } from "./health.ts";
 
 const MAX_TOOL_ROUNDS = 4;
 

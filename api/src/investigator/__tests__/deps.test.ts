@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { depsFromStore } from "../deps.js";
+import { depsFromStore } from "../deps.ts";
 import {
   allFixtureDeps,
   burstIncident,
   burstEvents,
-} from "./fixtures.js";
+} from "./fixtures.ts";
 
 describe("depsFromStore", () => {
   it("forwards store methods onto InvestigatorDeps", async () => {

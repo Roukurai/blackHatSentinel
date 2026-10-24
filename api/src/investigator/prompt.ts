@@ -1,4 +1,4 @@
-import type { Incident } from "./types.js";
+import type { Incident } from "./types.ts";
 
 export const SYSTEM_PROMPT = `You are an L1 SOC analyst for ONE Ubuntu host with SSH authentication logs only.
 

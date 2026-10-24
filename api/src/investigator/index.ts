@@ -1,21 +1,21 @@
-import { loadLlmConfig } from "./config.js";
-import { HealthTracker } from "./health.js";
-import { runInvestigation } from "./run.js";
+import { loadLlmConfig } from "./config.ts";
+import { HealthTracker } from "./health.ts";
+import { runInvestigation } from "./run.ts";
 import type {
   Investigator,
   InvestigatorDeps,
   Investigation,
   LlmConfig,
-} from "./types.js";
+} from "./types.ts";
 
-export { loadLlmConfig } from "./config.js";
-export { depsFromStore } from "./deps.js";
-export type { InvestigatorStore } from "./deps.js";
+export { loadLlmConfig } from "./config.ts";
+export { depsFromStore } from "./deps.ts";
+export type { InvestigatorStore } from "./deps.ts";
 export {
   scheduleInvestigation,
   handleInvestigateRoute,
   healthLlmField,
-} from "./wire.js";
+} from "./wire.ts";
 export type {
   Finding,
   Investigation,
@@ -25,7 +25,7 @@ export type {
   LlmConfig,
   Incident,
   SentinelEvent,
-} from "./types.js";
+} from "./types.ts";
 
 export function createInvestigator(
   deps: InvestigatorDeps,

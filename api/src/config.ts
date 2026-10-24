@@ -42,6 +42,10 @@ function integer(value: string, fallback: number): number {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const file = readEnvFile(path.join(repoRoot, ".env"));
+  // Expose .env keys to process.env for the investigator (LLM_*), without overriding real env.
+  for (const [key, value] of Object.entries(file)) {
+    if (env[key] === undefined || env[key] === "") env[key] = value;
+  }
   const port = integer(pick(file, env, "API_PORT", "8080"), 8080);
   const dbValue = pick(file, env, "DB_PATH", "./data/sentinel.db");
   const dbPath = path.isAbsolute(dbValue) ? dbValue : path.resolve(repoRoot, dbValue);
