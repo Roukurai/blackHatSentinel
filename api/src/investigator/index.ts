@@ -9,6 +9,8 @@ import type {
 } from "./types.js";
 
 export { loadLlmConfig } from "./config.js";
+export { depsFromStore } from "./deps.js";
+export type { InvestigatorStore } from "./deps.js";
 export {
   scheduleInvestigation,
   handleInvestigateRoute,
