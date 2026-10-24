@@ -36,7 +36,6 @@ export function useIncident(id: string | undefined) {
     queryFn: ({ signal }) => api.incident(id!, signal),
     enabled: Boolean(id),
     placeholderData: keepPreviousData,
-    retry: (count, err) => !(err instanceof ApiError && err.kind === "not_found") && count < 1,
     refetchInterval: (q) => pollUnlessFatal(q.state.error),
   });
 }

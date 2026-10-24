@@ -65,7 +65,7 @@ export function IncidentsPage() {
 
       {data && data.length === 0 && (
         <div className="card">
-          <EmptyState title="No incidents">Sentinel is watching SSH activity. Suspicious patterns will appear here.</EmptyState>
+          <EmptyState title="No incidents">Sentinell is watching SSH activity. Suspicious patterns will appear here.</EmptyState>
         </div>
       )}
 

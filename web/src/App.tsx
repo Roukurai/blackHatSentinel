@@ -1,5 +1,7 @@
+import { useCallback, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { useHealth, useIncidents } from "./api/queries";
+import { CommandPalette, MOD_KEY, useCommandPaletteHotkey } from "./components/CommandPalette";
 import { FixtureBanner } from "./components/FixtureBanner";
 import { HealthIndicator, HealthPage } from "./components/Health";
 import { IncidentPage } from "./components/IncidentDetail";
@@ -7,10 +9,15 @@ import { IncidentsPage } from "./components/IncidentList";
 import { EmptyState } from "./components/ui";
 
 export function App() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const togglePalette = useCallback(() => setPaletteOpen((o) => !o), []);
+  useCommandPaletteHotkey(togglePalette);
+
   return (
     <div className="shell">
       <FixtureBanner />
-      <Header />
+      <Header onOpenPalette={() => setPaletteOpen(true)} />
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
       <main className="main">
         <Routes>
           <Route path="/" element={<IncidentsPage />} />
@@ -36,16 +43,16 @@ function IncidentRoute() {
 }
 
 function Logo() {
-  // Sentinel mark: a monochrome shield. Not the Vercel logo.
+  // Sentinell mark (shared with the landing page): a filled shield with a horizontal slit.
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 2 3.5 5.5v6c0 5 3.6 9.3 8.5 10.5 4.9-1.2 8.5-5.5 8.5-10.5v-6L12 2Z" fill="currentColor" />
-      <path d="M8 12.5h8" stroke="var(--ds-background-200)" strokeWidth="2" strokeLinecap="round" />
+      <path d="M8 12.5h8" stroke="var(--brand-background)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
 
-function Header() {
+function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
   const health = useHealth();
   const incidents = useIncidents();
   const host = health.data?.host_id ?? incidents.data?.[0]?.host_id;
@@ -55,9 +62,9 @@ function Header() {
   return (
     <header className="header">
       <div className="header__top">
-        <NavLink to="/" className="brand" aria-label="Sentinel home">
+        <NavLink to="/" className="brand" aria-label="Sentinell home">
           <Logo />
-          <span>Sentinel</span>
+          <span>Sentinell</span>
         </NavLink>
         <span className="slash" aria-hidden="true">
           /
@@ -67,6 +74,16 @@ function Header() {
           <span className="mono">{host ?? "—"}</span>
         </span>
         <span className="spacer" />
+        <button type="button" className="search-trigger" onClick={onOpenPalette} aria-label="Open command menu">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span className="search-trigger__label">Search…</span>
+          <kbd>
+            {MOD_KEY} K
+          </kbd>
+        </button>
         <HealthIndicator />
       </div>
       <nav className="tabs" aria-label="Sections">

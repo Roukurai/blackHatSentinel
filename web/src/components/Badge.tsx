@@ -2,7 +2,8 @@ import type { IncidentStatus, NotificationStatus, Origin, Severity } from "../ap
 import { patternLabel, SEVERITY_LABELS, STATUS_LABELS } from "../lib/format";
 import { GBadge, StatusDot, type Tone } from "./ui";
 
-const SEVERITY_TONE: Record<Severity, Tone> = { high: "red", medium: "amber", low: "blue" };
+// Signal (the "blue" tone slot) is reserved for attention; low severity stays neutral.
+const SEVERITY_TONE: Record<Severity, Tone> = { high: "red", medium: "amber", low: "gray" };
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
   return <GBadge tone={SEVERITY_TONE[severity] ?? "gray"}>{SEVERITY_LABELS[severity] ?? severity}</GBadge>;
