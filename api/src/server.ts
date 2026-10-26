@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { addCounter, eventsByIds, hasFailedNotification, incidentById, latestEventTimestamp, listIncidentRecords, toIncident } from "./db.ts";
 import { ingest } from "./ingest.ts";
 import { ActionError, actionForIncident, approveAction, ensureActionsTable, rejectAction } from "./actions.ts";
@@ -180,6 +183,29 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+const COLLECTOR_FRESH_MS = 5 * 60_000;
+
+function apiVersion(): string {
+  try {
+    const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
+    return typeof pkg.version === "string" ? pkg.version : "0.1.0";
+  } catch {
+    return "0.1.0";
+  }
+}
+
+function publicHealth(db: DatabaseSync): { ok: true; version: string; collector_fresh: boolean; db_ok: true } {
+  const last = latestEventTimestamp(db);
+  const age = last ? Date.now() - Date.parse(last) : Number.POSITIVE_INFINITY;
+  return {
+    ok: true,
+    version: apiVersion(),
+    collector_fresh: Number.isFinite(age) && age >= 0 && age < COLLECTOR_FRESH_MS,
+    db_ok: true,
+  };
+}
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -231,6 +257,22 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
     return;
   }
 
+  if (path === "/health" && req.method === "GET") {
+    const identity = identityFor(config);
+    if (identity && authorized(req, identity, db)) {
+      sendJson(res, 200, {
+        collector_last_event_at: latestEventTimestamp(db),
+        llm: healthLlmField(investigator),
+        telegram: config.telegramToken && config.telegramChatId && !hasFailedNotification(db) ? "ok" : "failed",
+        db: "ok",
+        host_id: config.hostId ?? null,
+      });
+    } else {
+      sendJson(res, 200, publicHealth(db));
+    }
+    return;
+  }
+
   if (path === "/auth/status" && req.method === "GET") {
     const configured = identityFor(config) !== null;
     // Only where to find the token, never the token itself.
@@ -267,17 +309,6 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Server
   if (!authorized(req, identity, db)) {
     if (!identity) throw new HttpError(401, "setup_required");
     throw new HttpError(401, "unauthorized");
-  }
-
-  if (path === "/health" && req.method === "GET") {
-    sendJson(res, 200, {
-      collector_last_event_at: latestEventTimestamp(db),
-      llm: healthLlmField(investigator),
-      telegram: config.telegramToken && config.telegramChatId && !hasFailedNotification(db) ? "ok" : "failed",
-      db: "ok",
-      host_id: config.hostId ?? null,
-    });
-    return;
   }
 
   if (path === "/incidents" && req.method === "GET") {

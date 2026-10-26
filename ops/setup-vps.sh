@@ -29,6 +29,8 @@ DO_DEMO=0
 DO_VERIFY=0
 ALLOW_GIVEN=0
 ALLOW_ITEMS=()
+HEAD_CHANGED=0
+COLLECTOR_REINSTALLED=0
 
 usage() {
   cat <<'EOF' >&2
@@ -392,12 +394,20 @@ phase1_repo() {
       else
         diff_line "git remote '${url:-unknown}'" "$REPO_URL"
       fi
+      # fetch is the only write --check is allowed; everything else stays read-only.
+      local behind="?"
+      if git -C "$REPO" fetch --quiet origin 2>/dev/null; then
+        behind=$(git -C "$REPO" rev-list --count HEAD..origin/main 2>/dev/null || echo "?")
+      fi
+      echo "behind origin/main by $behind"
     else
       diff_line "no clone at $REPO" "git clone $REPO_URL"
     fi
     return 0
   fi
 
+  local before after
+  before=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "")
   if [[ ! -d $REPO/.git ]]; then
     if [[ -n $(ls -A "$REPO" 2>/dev/null || true) ]]; then
       echo "setup-vps: $REPO exists but is not a git clone; refusing to reset" >&2
@@ -407,30 +417,56 @@ phase1_repo() {
   else
     git -C "$REPO" pull --ff-only
   fi
+  after=$(git -C "$REPO" rev-parse HEAD)
+  if [[ $before != "$after" ]]; then
+    HEAD_CHANGED=1
+  fi
   sudo chown -R rou:sentinel "$REPO"
   sudo chmod 2750 "$REPO"
   ok "repo $REPO"
+}
+
+check_db_perms() {
+  local f ugm found=0
+  for f in "$DATA"/sentinel.db "$DATA"/sentinel.db-wal "$DATA"/sentinel.db-shm "$DATA"/sentinel.db-journal; do
+    if ugm=$(try_stat_ugm "$f" 2>/dev/null); then
+      found=1
+      if [[ $ugm == "sentinel:sentinel 640" ]]; then
+        ok "$f ($ugm)"
+      else
+        diff_line "$f $ugm" "sentinel:sentinel 640"
+        if [[ $MODE == apply ]]; then
+          sudo chown sentinel:sentinel "$f"
+          sudo chmod 640 "$f"
+        fi
+      fi
+    fi
+  done
+  if [[ $found -eq 0 && $MODE == check ]]; then
+    ok "no sentinel.db* yet"
+  fi
 }
 
 phase2_env() {
   echo "== phase 2 env =="
   local ugm
   if ugm=$(try_stat_ugm "$DATA" 2>/dev/null); then
-    if [[ $ugm == "sentinel:sentinel 755" ]]; then
+    if [[ $ugm == "sentinel:sentinel 750" ]]; then
       ok "data dir $DATA ($ugm)"
     else
-      diff_line "$DATA $ugm" "sentinel:sentinel 755"
+      diff_line "$DATA $ugm" "sentinel:sentinel 750"
       if [[ $MODE == apply ]]; then
         sudo chown sentinel:sentinel "$DATA"
-        sudo chmod 755 "$DATA"
+        sudo chmod 750 "$DATA"
       fi
     fi
   else
-    diff_line "$DATA missing" "dir sentinel:sentinel 755"
+    diff_line "$DATA missing" "dir sentinel:sentinel 750"
     if [[ $MODE == apply ]]; then
-      ensure_dir "$DATA" sentinel:sentinel 755
+      ensure_dir "$DATA" sentinel:sentinel 750
     fi
   fi
+  check_db_perms
 
   if [[ $MODE == check ]]; then
     if ! sudo_n test -f "$ENV_FILE" 2>/dev/null && [[ ! -f $ENV_FILE ]]; then
@@ -474,6 +510,28 @@ newer_than() {
   return 0
 }
 
+# Newest regular file under a directory (empty if none). Used so web/src edits rebuild dist.
+newest_under() {
+  python3 - "$1" <<'PY'
+import os, sys
+root = sys.argv[1]
+newest = None
+if not os.path.isdir(root):
+    raise SystemExit(0)
+for dirpath, _, files in os.walk(root):
+    for name in files:
+        path = os.path.join(dirpath, name)
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            continue
+        if newest is None or mtime > newest[0]:
+            newest = (mtime, path)
+if newest:
+    print(newest[1])
+PY
+}
+
 phase3_build() {
   echo "== phase 3 build =="
   if [[ $MODE == check ]]; then
@@ -503,7 +561,14 @@ phase3_build() {
   else
     npm ci --prefix "$REPO/web"
   fi
-  if newer_than "$REPO/web/dist/index.html" "$REPO/web/package.json" "$REPO/web/index.html"; then
+  local web_inputs=("$REPO/web/package.json" "$REPO/web/index.html" "$REPO/web/vite.config.ts")
+  local tsconfig f src_newest
+  for tsconfig in "$REPO/web"/tsconfig*.json; do
+    [[ -e $tsconfig ]] && web_inputs+=("$tsconfig")
+  done
+  src_newest=$(newest_under "$REPO/web/src")
+  [[ -n ${src_newest:-} ]] && web_inputs+=("$src_newest")
+  if newer_than "$REPO/web/dist/index.html" "${web_inputs[@]}"; then
     ok "web build (skip, dist newer than inputs)"
   else
     npm run build --prefix "$REPO/web"
@@ -513,8 +578,14 @@ phase3_build() {
   else
     (cd "$REPO/collector" && "$CARGO" build --release)
   fi
-  sudo install -m 0755 -o root -g root "$REPO/collector/target/release/collector" "$COLLECTOR_BIN"
-  ok "$COLLECTOR_BIN"
+  COLLECTOR_REINSTALLED=0
+  if sudo_n test -x "$COLLECTOR_BIN" 2>/dev/null && sudo_n cmp -s "$REPO/collector/target/release/collector" "$COLLECTOR_BIN" 2>/dev/null; then
+    ok "$COLLECTOR_BIN (unchanged)"
+  else
+    sudo install -m 0755 -o root -g root "$REPO/collector/target/release/collector" "$COLLECTOR_BIN"
+    COLLECTOR_REINSTALLED=1
+    ok "$COLLECTOR_BIN"
+  fi
 }
 
 phase4_runner() {
@@ -633,6 +704,15 @@ phase5_systemd() {
   else
     echo "not starting; run: $ENABLE_CMD"
   fi
+
+  if [[ $HEAD_CHANGED -eq 1 ]] && systemctl is-active --quiet sentinel-api.service 2>/dev/null; then
+    sudo systemctl restart sentinel-api.service
+    ok "restarted sentinel-api (HEAD changed)"
+  fi
+  if [[ $COLLECTOR_REINSTALLED -eq 1 ]] && systemctl is-active --quiet sentinel-collector.service 2>/dev/null; then
+    sudo systemctl restart sentinel-collector.service
+    ok "restarted sentinel-collector (binary reinstalled)"
+  fi
 }
 
 do_demo_user() {
@@ -664,7 +744,7 @@ do_verify() {
   echo "== verify =="
   local code
   code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8080/health || true)
-  echo "GET /health http_code=$code (expect 401 without auth or 200)"
+  echo "GET /health http_code=$code (expect 200)"
 
   echo -n "sentinel-api: "; systemctl is-active sentinel-api.service || true
   echo -n "sentinel-collector: "; systemctl is-active sentinel-collector.service || true

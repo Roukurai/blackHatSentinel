@@ -3,9 +3,16 @@ import { loadConfig } from "./config.ts";
 import { openDatabase } from "./db.ts";
 import { createApiInvestigator } from "./investigate.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
+import { purgeUntrustedTelegramRecipients } from "./notify.ts";
+
+process.umask(0o027);
 
 const config = loadConfig();
 const db = openDatabase(config.dbPath);
+const removedRecipients = purgeUntrustedTelegramRecipients(db, config);
+if (removedRecipients > 0) {
+  console.log(`removed ${removedRecipients} untrusted telegram recipients`);
+}
 const investigator = createApiInvestigator(db, config.llmSettingsPath);
 const stopProbe = investigator.startHealthProbe();
 const server = createServer({ config, db, investigator });
@@ -25,7 +32,10 @@ server.listen(config.port, config.bind, () => {
 function shutdown(): void {
   clearInterval(timer);
   stopProbe();
+  const fallback = setTimeout(() => process.exit(0), 5_000);
+  fallback.unref();
   server.close(() => process.exit(0));
+  server.closeAllConnections();
 }
 
 process.on("SIGINT", shutdown);

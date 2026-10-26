@@ -41,16 +41,23 @@ function StepBody({ id, publicBaseUrl }: { id: StepId; publicBaseUrl: string }):
             <li>
               In Telegram, message <span className="mono">@BotFather</span>, send <span className="mono">/newbot</span> and copy the token.
             </li>
-            <li>Send any message to your new bot, then open this URL to find your chat ID:</li>
+            <li>
+              Put the token in <span className="mono">TELEGRAM_BOT_TOKEN</span>. Host alerts go only to
+              {" "}<span className="mono">TELEGRAM_CHAT_ID</span> and to accounts that link with a dashboard code.
+              Messaging the bot by itself does not subscribe a chat.
+            </li>
+            <li>
+              After you sign in, open Settings → Notifications and choose <span className="mono">Link my Telegram</span>.
+              Send the one-time code to the bot within 15 minutes.
+            </li>
           </ol>
-          <Command>{"https://api.telegram.org/bot<token>/getUpdates"}</Command>
           <EnvKeys
             keys={[
               { name: "TELEGRAM_BOT_TOKEN", example: "<from @BotFather>" },
-              { name: "TELEGRAM_CHAT_ID", example: "<your chat id>" },
+              { name: "TELEGRAM_CHAT_ID", example: "<optional host-alert chat id>" },
               { name: "PUBLIC_BASE_URL", example: publicBaseUrl || "http://<server-ip>:8080" },
             ]}
-            note="PUBLIC_BASE_URL is used in the alert link, so it must be reachable from your phone."
+            note="PUBLIC_BASE_URL is used in the alert link, so it must be reachable from your phone. Do not share the bot with strangers: only the configured chat and linked accounts receive host alerts."
           />
         </>
       );

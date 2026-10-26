@@ -37,7 +37,11 @@ case "$CMD" in
     ;;
   status)
     API_URL="${API_URL:-http://127.0.0.1:8080}"
-    curl -fsS "$API_URL/health" | head -c 2000
+    if ! out=$(curl -fsS --max-time 5 "$API_URL/health"); then
+      echo "sentinell: API unreachable at $API_URL" >&2
+      exit 1
+    fi
+    printf '%s\n' "$out" | head -c 2000
     echo
     ;;
   help|-h|--help|"")

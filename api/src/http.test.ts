@@ -55,6 +55,42 @@ function batch(): SentinelEvent[] {
   }));
 }
 
+test("GET /health is public without secrets; a session still gets details", async () => {
+  const db = openDatabase(":memory:");
+  const server = createServer({
+    config: config({ dashboardUser: "analyst", dashboardPass: "secret" }),
+    db,
+    send: async () => {},
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
+
+  const open = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  assert.equal(open.status, 200);
+  const publicBody = await open.json() as Record<string, unknown>;
+  assert.equal(publicBody.ok, true);
+  assert.equal(typeof publicBody.version, "string");
+  assert.equal(typeof publicBody.collector_fresh, "boolean");
+  assert.equal(publicBody.db_ok, true);
+  assert.equal("host_id" in publicBody, false);
+  assert.equal("collector_last_event_at" in publicBody, false);
+  assert.equal(JSON.stringify(publicBody).includes("secret"), false);
+  assert.equal(JSON.stringify(publicBody).includes("test-token"), false);
+
+  const authed = await fetch(`${base}/health`, { headers: authHeaders({ accept: "application/json" }) });
+  assert.equal(authed.status, 200);
+  const detailed = await authed.json() as Record<string, unknown>;
+  assert.equal(detailed.db, "ok");
+  assert.equal("host_id" in detailed, true);
+  assert.equal("collector_last_event_at" in detailed, true);
+
+  server.close();
+  await once(server, "close");
+  db.close();
+});
+
 test("localhost ingest creates an incident and serves it", async () => {
   const db = openDatabase(":memory:");
   const sent: string[] = [];
@@ -186,7 +222,7 @@ test("dashboard routes require basic auth when credentials are set", async () =>
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const port = (server.address() as AddressInfo).port;
-  const url = `http://127.0.0.1:${port}/health`;
+  const url = `http://127.0.0.1:${port}/incidents`;
 
   const denied = await fetch(url);
   assert.equal(denied.status, 401);
@@ -452,7 +488,9 @@ test("session login gates JSON and leaves the dashboard shell public", async () 
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Sentinell/);
 
-  const denied = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  const publicHealth = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  assert.equal(publicHealth.status, 200);
+  const denied = await fetch(`${base}/incidents`, { headers: { accept: "application/json" } });
   assert.equal(denied.status, 401);
 
   const bad = await fetch(`${base}/login`, {
@@ -480,19 +518,19 @@ test("session login gates JSON and leaves the dashboard shell public", async () 
   assert.equal(allowedByCookie.status, 200);
 
   const expired = issueSessionToken(envSessionSecret("analyst", "secret"), Math.floor(Date.now() / 1000) - 10);
-  const stale = await fetch(`${base}/health`, {
+  const stale = await fetch(`${base}/incidents`, {
     headers: { cookie: `sentinel_session=${expired}`, accept: "application/json" },
   });
   assert.equal(stale.status, 401);
 
-  const forged = await fetch(`${base}/health`, {
+  const forged = await fetch(`${base}/incidents`, {
     headers: { cookie: "sentinel_session=9999999999.not-a-signature", accept: "application/json" },
   });
   assert.equal(forged.status, 401);
 
   const out = await fetch(`${base}/logout`, { method: "POST", headers: { cookie } });
   assert.match(out.headers.get("set-cookie") ?? "", /Max-Age=0/i);
-  const after = await fetch(`${base}/health`, { headers: { cookie, accept: "application/json" } });
+  const after = await fetch(`${base}/incidents`, { headers: { cookie, accept: "application/json" } });
   assert.equal(after.status, 401);
 
   server.close();
@@ -537,9 +575,11 @@ test("first launch requires choosing a password, then that password signs in", a
   });
   assert.equal(wrongToken.status, 403);
   assert.equal(existsSync(authPath), false);
-  const locked = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  const locked = await fetch(`${base}/incidents`, { headers: { accept: "application/json" } });
   assert.equal(locked.status, 401);
   assert.equal((await locked.json() as { error: string }).error, "setup_required");
+  const openHealth = await fetch(`${base}/health`, { headers: { accept: "application/json" } });
+  assert.equal(openHealth.status, 200);
 
   const weak = await fetch(`${base}/setup`, {
     method: "POST",
@@ -648,20 +688,21 @@ test("changing the host password revokes the old one immediately", async () => {
   const basic = (pass: string) => ({ authorization: `Basic ${Buffer.from(`admin:${pass}`).toString("base64")}`, accept: "application/json" });
 
   const first = await start("old-long-password");
-  assert.equal((await fetch(`${first.base}/health`, { headers: basic("old-long-password") })).status, 200);
+  assert.equal((await fetch(`${first.base}/incidents`, { headers: basic("old-long-password") })).status, 200);
   first.server.close();
 
   // Operator rotates DASHBOARD_PASS and restarts; the stored row still has the old hash.
   const second = await start("new-long-password");
   try {
-    assert.equal((await fetch(`${second.base}/health`, { headers: basic("old-long-password") })).status, 401);
+    assert.equal((await fetch(`${second.base}/incidents`, { headers: basic("old-long-password") })).status, 401);
     const oldLogin = await fetch(`${second.base}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username: "admin", password: "old-long-password" }),
     });
     assert.equal(oldLogin.status, 401);
-    assert.equal((await fetch(`${second.base}/health`, { headers: basic("new-long-password") })).status, 200);
+    assert.equal((await fetch(`${second.base}/incidents`, { headers: basic("new-long-password") })).status, 200);
+    assert.equal((await fetch(`${second.base}/health`, { headers: { accept: "application/json" } })).status, 200);
   } finally {
     second.server.close();
     db.close();

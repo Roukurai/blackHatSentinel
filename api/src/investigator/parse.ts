@@ -23,7 +23,7 @@ const blockActionSchema = z
   .nullish();
 
 const remediationStepSchema = z.object({
-  order: z.number().int().optional(),
+  order: z.number().int().optional().transform((n) => n ?? 0),
   text: z.string(),
   urgency: z
     .string()

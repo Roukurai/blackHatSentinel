@@ -66,7 +66,7 @@ function checkpointEvents(): SentinelEvent[] {
   push(16, "ssh_preauth_disconnect", "198.51.100.7", 40001, "root");
   const slowStart = 5 * 60;
   for (const [index, username] of ["sol", "solana", "eth", "ethereum", "validator", "polygon", "tron", "node", "bot", "trader"].entries()) {
-    push(slowStart + index * 120, "ssh_invalid_user", "203.0.113.9", 30000, username);
+    push(slowStart + index * 120, "ssh_invalid_user", "203.0.113.9", 30000 + index, username);
   }
   const demo = 40 * 60;
   for (let i = 0; i < 6; i += 1) push(demo + i * 4, "ssh_failed_password", "203.0.113.77", 50000 + i, "demo");
@@ -97,6 +97,7 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
   const incidents = listIncidentRecords(db).map(toIncident).reverse();
   assert.deepEqual(incidents.map((incident) => incident.source_ip), [
     "192.0.2.50",
+    "203.0.113.9",
     "203.0.113.77",
     "203.0.113.200",
   ]);
@@ -108,16 +109,21 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
   assert.ok(burst.usernames.includes(""));
   assert.equal(burst.notification.status, "sent");
 
-  const demo = incidents[1];
+  const slow = incidents[1];
+  assert.equal(slow.severity, "low");
+  assert.deepEqual(slow.patterns, ["low_and_slow"]);
+  assert.equal(slow.failed_attempts, 10);
+
+  const demo = incidents[2];
   assert.equal(demo.severity, "high");
   assert.ok(demo.patterns.includes("success_after_failures"));
   assert.equal(demo.notification.attempts, 1);
 
-  const benign = incidents[2];
+  const benign = incidents[3];
   assert.equal(benign.severity, "low");
   assert.deepEqual(benign.patterns, ["new_source_success"]);
 
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 4);
   for (const text of sent) {
     assert.equal(text.includes("RAW_SHOULD_NOT_LEAK"), false);
     assert.equal(text.includes("solana"), false);
@@ -130,10 +136,12 @@ test("checkpoint replay opens one incident per source and alerts once", async ()
     assert.match(text, /Origin: replay/);
     assert.match(text, /Status: investigation pending/);
   }
-  assert.match(sent[1], /Severity: high/);
-  assert.match(sent[1], /success after failures/);
-  assert.match(sent[2], /Severity: low/);
-  assert.match(sent[2], /success from a new source/);
+  assert.match(sent[1], /Severity: low/);
+  assert.match(sent[1], /low-and-slow/);
+  assert.match(sent[2], /Severity: high/);
+  assert.match(sent[2], /success after failures/);
+  assert.match(sent[3], /Severity: low/);
+  assert.match(sent[3], /success from a new source/);
   db.close();
 });
 

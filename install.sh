@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Public entrypoint for https://sentinell.xyz/install.sh
 # Works when piped (curl | bash) or run from a clone.
+#
+#   curl -fsSL https://sentinell.xyz/install.sh | bash
+#   curl -fsSL https://sentinell.xyz/install.sh | bash -s -- --with-deps
 set -euo pipefail
 
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" && -f "$(dirname "${BASH_SOURCE[0]}")/ops/install.sh" ]]; then
