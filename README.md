@@ -135,12 +135,21 @@ Sentinell started as a hackathon project and is a working prototype. Scope today
 ### 1. Install
 
 ```bash
+curl -fsSL https://sentinell.xyz/install.sh | bash
+# Debian/Ubuntu: also install git, Node 22, a C toolchain and Rust if missing
+curl -fsSL https://sentinell.xyz/install.sh | bash -s -- --with-deps
+```
+
+Or from a clone:
+
+```bash
 git clone https://github.com/Roukurai/blackHatSentinel.git
 cd blackHatSentinel
 bash ops/install.sh
+# bash ops/install.sh --with-deps
 ```
 
-The installer installs the API and dashboard dependencies, builds the collector if `cargo` is available, creates `.env` from [`.env.example`](.env.example) and links the `sentinell` CLI into `~/.local/bin`. It clones into `~/sentinell` when run outside a clone.
+The installer installs the API and dashboard dependencies, builds the collector if `cargo` is available, creates `.env` from [`.env.example`](.env.example) and links the `sentinell` CLI into `~/.local/bin`. It clones into `~/sentinell` when run outside a clone. `--with-deps` (or `SENTINELL_WITH_DEPS=1`) is Debian/Ubuntu only and never runs without that flag.
 
 ### 2. Configure
 
