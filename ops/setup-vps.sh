@@ -426,25 +426,47 @@ phase1_repo() {
   ok "repo $REPO"
 }
 
+check_db_perms() {
+  local f ugm found=0
+  for f in "$DATA"/sentinel.db "$DATA"/sentinel.db-wal "$DATA"/sentinel.db-shm "$DATA"/sentinel.db-journal; do
+    if ugm=$(try_stat_ugm "$f" 2>/dev/null); then
+      found=1
+      if [[ $ugm == "sentinel:sentinel 640" ]]; then
+        ok "$f ($ugm)"
+      else
+        diff_line "$f $ugm" "sentinel:sentinel 640"
+        if [[ $MODE == apply ]]; then
+          sudo chown sentinel:sentinel "$f"
+          sudo chmod 640 "$f"
+        fi
+      fi
+    fi
+  done
+  if [[ $found -eq 0 && $MODE == check ]]; then
+    ok "no sentinel.db* yet"
+  fi
+}
+
 phase2_env() {
   echo "== phase 2 env =="
   local ugm
   if ugm=$(try_stat_ugm "$DATA" 2>/dev/null); then
-    if [[ $ugm == "sentinel:sentinel 755" ]]; then
+    if [[ $ugm == "sentinel:sentinel 750" ]]; then
       ok "data dir $DATA ($ugm)"
     else
-      diff_line "$DATA $ugm" "sentinel:sentinel 755"
+      diff_line "$DATA $ugm" "sentinel:sentinel 750"
       if [[ $MODE == apply ]]; then
         sudo chown sentinel:sentinel "$DATA"
-        sudo chmod 755 "$DATA"
+        sudo chmod 750 "$DATA"
       fi
     fi
   else
-    diff_line "$DATA missing" "dir sentinel:sentinel 755"
+    diff_line "$DATA missing" "dir sentinel:sentinel 750"
     if [[ $MODE == apply ]]; then
-      ensure_dir "$DATA" sentinel:sentinel 755
+      ensure_dir "$DATA" sentinel:sentinel 750
     fi
   fi
+  check_db_perms
 
   if [[ $MODE == check ]]; then
     if ! sudo_n test -f "$ENV_FILE" 2>/dev/null && [[ ! -f $ENV_FILE ]]; then

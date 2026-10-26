@@ -4,6 +4,8 @@ import { openDatabase } from "./db.ts";
 import { createApiInvestigator } from "./investigate.ts";
 import { flushAndFollowUp } from "./pipeline.ts";
 
+process.umask(0o027);
+
 const config = loadConfig();
 const db = openDatabase(config.dbPath);
 const investigator = createApiInvestigator(db, config.llmSettingsPath);
