@@ -29,6 +29,8 @@ DO_DEMO=0
 DO_VERIFY=0
 ALLOW_GIVEN=0
 ALLOW_ITEMS=()
+HEAD_CHANGED=0
+COLLECTOR_REINSTALLED=0
 
 usage() {
   cat <<'EOF' >&2
@@ -392,12 +394,20 @@ phase1_repo() {
       else
         diff_line "git remote '${url:-unknown}'" "$REPO_URL"
       fi
+      # fetch is the only write --check is allowed; everything else stays read-only.
+      local behind="?"
+      if git -C "$REPO" fetch --quiet origin 2>/dev/null; then
+        behind=$(git -C "$REPO" rev-list --count HEAD..origin/main 2>/dev/null || echo "?")
+      fi
+      echo "behind origin/main by $behind"
     else
       diff_line "no clone at $REPO" "git clone $REPO_URL"
     fi
     return 0
   fi
 
+  local before after
+  before=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "")
   if [[ ! -d $REPO/.git ]]; then
     if [[ -n $(ls -A "$REPO" 2>/dev/null || true) ]]; then
       echo "setup-vps: $REPO exists but is not a git clone; refusing to reset" >&2
@@ -406,6 +416,10 @@ phase1_repo() {
     git clone "$REPO_URL" "$REPO"
   else
     git -C "$REPO" pull --ff-only
+  fi
+  after=$(git -C "$REPO" rev-parse HEAD)
+  if [[ $before != "$after" ]]; then
+    HEAD_CHANGED=1
   fi
   sudo chown -R rou:sentinel "$REPO"
   sudo chmod 2750 "$REPO"
@@ -474,6 +488,28 @@ newer_than() {
   return 0
 }
 
+# Newest regular file under a directory (empty if none). Used so web/src edits rebuild dist.
+newest_under() {
+  python3 - "$1" <<'PY'
+import os, sys
+root = sys.argv[1]
+newest = None
+if not os.path.isdir(root):
+    raise SystemExit(0)
+for dirpath, _, files in os.walk(root):
+    for name in files:
+        path = os.path.join(dirpath, name)
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            continue
+        if newest is None or mtime > newest[0]:
+            newest = (mtime, path)
+if newest:
+    print(newest[1])
+PY
+}
+
 phase3_build() {
   echo "== phase 3 build =="
   if [[ $MODE == check ]]; then
@@ -503,7 +539,14 @@ phase3_build() {
   else
     npm ci --prefix "$REPO/web"
   fi
-  if newer_than "$REPO/web/dist/index.html" "$REPO/web/package.json" "$REPO/web/index.html"; then
+  local web_inputs=("$REPO/web/package.json" "$REPO/web/index.html" "$REPO/web/vite.config.ts")
+  local tsconfig f src_newest
+  for tsconfig in "$REPO/web"/tsconfig*.json; do
+    [[ -e $tsconfig ]] && web_inputs+=("$tsconfig")
+  done
+  src_newest=$(newest_under "$REPO/web/src")
+  [[ -n ${src_newest:-} ]] && web_inputs+=("$src_newest")
+  if newer_than "$REPO/web/dist/index.html" "${web_inputs[@]}"; then
     ok "web build (skip, dist newer than inputs)"
   else
     npm run build --prefix "$REPO/web"
@@ -513,8 +556,14 @@ phase3_build() {
   else
     (cd "$REPO/collector" && "$CARGO" build --release)
   fi
-  sudo install -m 0755 -o root -g root "$REPO/collector/target/release/collector" "$COLLECTOR_BIN"
-  ok "$COLLECTOR_BIN"
+  COLLECTOR_REINSTALLED=0
+  if sudo_n test -x "$COLLECTOR_BIN" 2>/dev/null && sudo_n cmp -s "$REPO/collector/target/release/collector" "$COLLECTOR_BIN" 2>/dev/null; then
+    ok "$COLLECTOR_BIN (unchanged)"
+  else
+    sudo install -m 0755 -o root -g root "$REPO/collector/target/release/collector" "$COLLECTOR_BIN"
+    COLLECTOR_REINSTALLED=1
+    ok "$COLLECTOR_BIN"
+  fi
 }
 
 phase4_runner() {
@@ -632,6 +681,15 @@ phase5_systemd() {
     ok "enabled and started api + collector"
   else
     echo "not starting; run: $ENABLE_CMD"
+  fi
+
+  if [[ $HEAD_CHANGED -eq 1 ]] && systemctl is-active --quiet sentinel-api.service 2>/dev/null; then
+    sudo systemctl restart sentinel-api.service
+    ok "restarted sentinel-api (HEAD changed)"
+  fi
+  if [[ $COLLECTOR_REINSTALLED -eq 1 ]] && systemctl is-active --quiet sentinel-collector.service 2>/dev/null; then
+    sudo systemctl restart sentinel-collector.service
+    ok "restarted sentinel-collector (binary reinstalled)"
   fi
 }
 
