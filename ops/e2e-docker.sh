@@ -64,7 +64,17 @@ bad()     { printf '  \033[31mFAIL\033[0m %s\n' "$*"; FAIL=$((FAIL+1)); }
 step()    { printf '\n\033[1m== [%s] %s ==\033[0m\n' "$SCEN" "$*"; }
 summary() { printf '\n\033[1m[%s] RESULT: %d passed, %d failed (%ss)\033[0m\n' "$SCEN" "$PASS" "$FAIL" "$(( $(date +%s) - T0 ))"; }
 shell_or_exit() { summary; if [ "$SHELLMODE" = 1 ]; then echo "logs: /tmp/*.log"; exec bash; fi; exit "$1"; }
-fatal()   { bad "$*"; shell_or_exit 1; }
+fatal()   {
+  bad "$*"
+  local f
+  for f in /tmp/install-auto.log /tmp/install-auto2.log /tmp/install-1.log /tmp/install-2.log /tmp/api.log; do
+    if [ -s "$f" ]; then
+      echo "----- $f -----"
+      cat "$f"
+    fi
+  done
+  shell_or_exit 1
+}
 has()     { grep -qF -- "$2" "$1" 2>/dev/null; }
 
 SITE_URL=https://sentinell.xyz/install.sh

@@ -207,6 +207,12 @@ main() {
   fi
 
   # --- source ----------------------------------------------------------------
+  # Local path clones (e2e --source local) run as root against a bind-mount owned
+  # by another uid; Git 2.35+ then refuses with "dubious ownership" (exit 128).
+  if [[ $REPO_URL == /* ]]; then
+    git config --global --add safe.directory "$REPO_URL"
+    git config --global --add safe.directory "$REPO_URL/.git"
+  fi
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     say "updating existing clone…"
     git -C "$INSTALL_DIR" pull --ff-only \
