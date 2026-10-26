@@ -10,7 +10,7 @@
 | Connection closed by authenticating user root ... [preauth] | ssh_preauth_disconnect | root | 198.51.100.7 | |
 | Connection closed by 198.51.100.7 port 40002 | — | — | — | SKIP (probe, no user) |
 | Server listening on 0.0.0.0 port 22. | — | — | — | SKIP (not an auth line) |
-| Invalid user <crypto> from 203.0.113.9 (x10) | ssh_invalid_user | sol/eth/... | 203.0.113.9 | low-and-slow |
+| Invalid user <crypto> from 203.0.113.9 ports 30000–30009 (x10) | ssh_invalid_user | sol/eth/... | 203.0.113.9 | low-and-slow |
 | Failed password for demo from 203.0.113.77 (x6) | ssh_failed_password | demo | 203.0.113.77 | demo seq |
 | Accepted password for demo from 203.0.113.77 | ssh_success | demo | 203.0.113.77 | demo success |
 | Accepted publickey for rou from 203.0.113.200 ... SHA256:... | ssh_success | rou | 203.0.113.200 | new IP, known key |
