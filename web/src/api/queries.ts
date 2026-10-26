@@ -36,10 +36,11 @@ export function useHealth(enabled = true) {
   });
 }
 
-export function useIncidents() {
+export function useIncidents(enabled = true) {
   return useQuery({
     queryKey: keys.incidents,
     queryFn: ({ signal }) => api.incidents(signal),
+    enabled,
     refetchInterval: (q) => pollUnlessFatal(q.state.error),
   });
 }

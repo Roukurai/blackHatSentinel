@@ -23,17 +23,19 @@ export function App() {
 function GuardedWorkspace() {
   const status = useAuthStatus();
   const configured = status.data?.configured === true;
-  const health = useHealth(configured);
+  // /health is public (for `sentinell status`); a gated route still decides login vs workspace.
+  const session = useIncidents(configured);
+  const health = useHealth(configured && session.isSuccess);
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries();
   const needsSetup =
-    status.data?.configured === false || (health.error instanceof ApiError && health.error.kind === "setup");
-  const needsLogin = health.error instanceof ApiError && health.error.kind === "auth";
+    status.data?.configured === false || (session.error instanceof ApiError && session.error.kind === "setup");
+  const needsLogin = session.error instanceof ApiError && session.error.kind === "auth";
 
   if (status.isPending) return <AuthBoot />;
   if (needsSetup) return <SetupPassword tokenPath={status.data?.setup_token_path} onSuccess={refresh} />;
   if (needsLogin) return <LoginScreen onSuccess={refresh} />;
-  if (health.isPending && !health.data) return <AuthBoot />;
+  if ((session.isPending && !session.data) || (health.isPending && !health.data && !health.isError)) return <AuthBoot />;
 
   const signOut = async () => {
     await logout();

@@ -722,7 +722,7 @@ do_verify() {
   echo "== verify =="
   local code
   code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8080/health || true)
-  echo "GET /health http_code=$code (expect 401 without auth or 200)"
+  echo "GET /health http_code=$code (expect 200)"
 
   echo -n "sentinel-api: "; systemctl is-active sentinel-api.service || true
   echo -n "sentinel-collector: "; systemctl is-active sentinel-collector.service || true
