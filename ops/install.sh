@@ -71,7 +71,10 @@ main() {
   local miss=() req_fail=0
   report() { # report KIND NAME DETAIL FIX
     miss+=("$2"$'\n'"    $3"$'\n'"    fix: $4")
-    [[ $1 == req ]] && req_fail=1
+    if [[ $1 == req ]]; then
+      req_fail=1
+    fi
+    return 0
   }
 
   local GIT_FIX="sudo apt-get install -y --no-install-recommends git"
