@@ -27,7 +27,10 @@ server.listen(config.port, config.bind, () => {
 function shutdown(): void {
   clearInterval(timer);
   stopProbe();
+  const fallback = setTimeout(() => process.exit(0), 5_000);
+  fallback.unref();
   server.close(() => process.exit(0));
+  server.closeAllConnections();
 }
 
 process.on("SIGINT", shutdown);
