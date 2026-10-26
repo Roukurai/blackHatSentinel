@@ -111,7 +111,7 @@ function sanitizeRemediation(
       step.urgency === "low" || step.urgency === "high" || step.urgency === "medium"
         ? step.urgency
         : "medium";
-    let mode = step.mode === "automatable" ? "automatable" : "manual";
+    let mode: RemediationStep["mode"] = step.mode === "automatable" ? "automatable" : "manual";
     let action = step.action;
 
     if (
