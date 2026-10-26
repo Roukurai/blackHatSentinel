@@ -366,11 +366,11 @@ export function NotificationsSettingsPage() {
       <EnvKeys
         keys={[
           { name: "TELEGRAM_BOT_TOKEN", example: "<from @BotFather>" },
-          { name: "TELEGRAM_CHAT_ID", example: "<your chat id>" },
+          { name: "TELEGRAM_CHAT_ID", example: "<optional host-alert chat id>" },
           { name: "PUBLIC_BASE_URL", example: "http://<server-ip>:8080" },
           { name: "NOTIFY_COOLDOWN_SECONDS", example: "300" },
         ]}
-        note="Tokens stay in .env on the host and are never sent to the browser."
+        note="Host alerts go to TELEGRAM_CHAT_ID and to chats that sent a dashboard link code (Link my Telegram above). Anyone else who messages the bot is ignored. Tokens stay in .env on the host and are never sent to the browser."
       />
     </div>
   );

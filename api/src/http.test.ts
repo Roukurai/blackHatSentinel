@@ -688,20 +688,21 @@ test("changing the host password revokes the old one immediately", async () => {
   const basic = (pass: string) => ({ authorization: `Basic ${Buffer.from(`admin:${pass}`).toString("base64")}`, accept: "application/json" });
 
   const first = await start("old-long-password");
-  assert.equal((await fetch(`${first.base}/health`, { headers: basic("old-long-password") })).status, 200);
+  assert.equal((await fetch(`${first.base}/incidents`, { headers: basic("old-long-password") })).status, 200);
   first.server.close();
 
   // Operator rotates DASHBOARD_PASS and restarts; the stored row still has the old hash.
   const second = await start("new-long-password");
   try {
-    assert.equal((await fetch(`${second.base}/health`, { headers: basic("old-long-password") })).status, 401);
+    assert.equal((await fetch(`${second.base}/incidents`, { headers: basic("old-long-password") })).status, 401);
     const oldLogin = await fetch(`${second.base}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username: "admin", password: "old-long-password" }),
     });
     assert.equal(oldLogin.status, 401);
-    assert.equal((await fetch(`${second.base}/health`, { headers: basic("new-long-password") })).status, 200);
+    assert.equal((await fetch(`${second.base}/incidents`, { headers: basic("new-long-password") })).status, 200);
+    assert.equal((await fetch(`${second.base}/health`, { headers: { accept: "application/json" } })).status, 200);
   } finally {
     second.server.close();
     db.close();

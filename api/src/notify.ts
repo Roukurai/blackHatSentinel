@@ -10,7 +10,7 @@ import {
   type IncidentRecord,
 } from "./db.ts";
 import type { Config } from "./types.ts";
-import { markPersonalDelivered, pendingPersonal, tryBindTelegram } from "./users.ts";
+import { ensureUserTables, markPersonalDelivered, pendingPersonal, tryBindTelegram } from "./users.ts";
 
 export type SendText = (text: string) => Promise<void>;
 
@@ -59,6 +59,29 @@ function rememberChat(db: DatabaseSync, chatId: string): boolean {
   return !existing;
 }
 
+function boundChatIds(db: DatabaseSync): Set<string> {
+  const rows = db.prepare(
+    "SELECT telegram_chat_id FROM dashboard_users WHERE telegram_chat_id IS NOT NULL",
+  ).all() as Array<{ telegram_chat_id: string }>;
+  return new Set(rows.map((row) => String(row.telegram_chat_id)));
+}
+
+/** Drop recipient rows that are neither TELEGRAM_CHAT_ID nor bound to a dashboard user. */
+export function purgeUntrustedTelegramRecipients(db: DatabaseSync, config: Config): number {
+  ensureTelegramTables(db);
+  ensureUserTables(db);
+  const allowed = new Set([...configuredChatIds(config), ...boundChatIds(db)]);
+  const saved = db.prepare("SELECT chat_id FROM telegram_recipients").all() as Array<{ chat_id: string }>;
+  const del = db.prepare("DELETE FROM telegram_recipients WHERE chat_id = ?");
+  let removed = 0;
+  for (const row of saved) {
+    if (allowed.has(row.chat_id)) continue;
+    del.run(row.chat_id);
+    removed += 1;
+  }
+  return removed;
+}
+
 function alertChatIds(db: DatabaseSync, config: Config): string[] {
   const saved = db.prepare("SELECT chat_id FROM telegram_recipients").all() as Array<{ chat_id: string }>;
   return [...new Set([...configuredChatIds(config), ...saved.map((row) => row.chat_id)])];
@@ -75,7 +98,9 @@ function privateChat(update: {
   return { id: String(chat.id), text: message?.text ?? "" };
 }
 
-async function syncLinkedChats(db: DatabaseSync, token: string): Promise<void> {
+async function syncLinkedChats(db: DatabaseSync, config: Config): Promise<void> {
+  ensureUserTables(db);
+  const token = config.telegramToken;
   const row = db.prepare("SELECT update_offset FROM telegram_offset WHERE id = 1").get() as { update_offset: number } | undefined;
   const offset = row?.update_offset ?? 0;
   const url = new URL(`https://api.telegram.org/bot${token}/getUpdates`);
@@ -93,23 +118,25 @@ async function syncLinkedChats(db: DatabaseSync, token: string): Promise<void> {
     }>;
   };
   if (!payload.ok || !payload.result) return;
+  const configured = new Set(configuredChatIds(config));
   let next = offset;
   for (const update of payload.result) {
     next = Math.max(next, update.update_id + 1);
     const chat = privateChat(update);
     if (!chat) continue;
+    const bound = tryBindTelegram(db, chat.text, chat.id);
+    if (!bound && !configured.has(chat.id)) continue;
     const isNew = rememberChat(db, chat.id);
-    tryBindTelegram(db, chat.text, chat.id);
-    if (!isNew) continue;
+    if (!bound || !isNew) continue;
     try {
       await deliverTelegram(
-        { telegramToken: token, telegramChatId: chat.id } as Config,
+        config,
         chat.id,
         "Sentinel\nThis device is registered. Alerts for this host will arrive here.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "telegram failed";
-      console.error(`telegram register failed for ${chat.id}: ${message}`);
+      console.error(`telegram register failed: ${message}`);
     }
   }
   if (next === offset) return;
@@ -186,7 +213,7 @@ export async function flushNotifications(
   ensureTelegramTables(db);
   if (send === undefined && config.telegramToken) {
     try {
-      await syncLinkedChats(db, config.telegramToken);
+      await syncLinkedChats(db, config);
     } catch (err) {
       const message = err instanceof Error ? err.message : "telegram failed";
       console.error(`telegram link sync failed: ${message}`);
